@@ -61,7 +61,7 @@ defmodule Tria.MixProject do
         String.trim_trailing(File.read!(".git/#{String.trim_trailing(path)}"))
 
       other ->
-        other
+        String.trim_trailing(other)
     end
   end
 end
