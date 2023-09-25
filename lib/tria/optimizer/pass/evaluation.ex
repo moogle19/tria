@@ -1,5 +1,4 @@
 defmodule Tria.Optimizer.Pass.Evaluation do
-
   @moduledoc """
   This pass tries to evaluate everything what
   can be preevaluated, propagates variables,
@@ -23,20 +22,24 @@ defmodule Tria.Optimizer.Pass.Evaluation do
 
   defstruct [
     # Runtime variable which is passed during traversal.
-    bindings: %{},           # Contains a context (pattern -> value)
-    used: %{},               # Contains variabled which are used anywhere (variable -> times used)
+    # Contains a context (pattern -> value)
+    bindings: %{},
+    # Contains variabled which are used anywhere (variable -> times used)
+    used: %{},
 
     # Results of the evaluation are stored here
-    hit: false,              # Marks if anything was changed during run
-    depmap: %Depmap{}        # Dependencies
+    # Marks if anything was changed during run
+    hit: false,
+    # Dependencies
+    depmap: %Depmap{}
   ]
 
   @type state :: %__MODULE__{
-    bindings: Bindmap.t(),
-    hit: boolean(),
-    used: map(),
-    depmap: Depmap.t()
-  }
+          bindings: Bindmap.t(),
+          hit: boolean(),
+          used: map(),
+          depmap: Depmap.t()
+        }
 
   @typedoc """
   Option for run_* family of functions
@@ -47,9 +50,10 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   `:state` -- allows to define state of evaluation
   `:return_depmap` -- allows to specify whether to return the depmap alongside the resulting AST
   """
-  @type option :: {:remove_unused, boolean()}
-  | {:inspect_iteration, atom()}
-  | {:state, state()}
+  @type option ::
+          {:remove_unused, boolean()}
+          | {:inspect_iteration, atom()}
+          | {:state, state()}
 
   ## Pass callbacks
 
@@ -73,6 +77,7 @@ defmodule Tria.Optimizer.Pass.Evaluation do
     Tracer.tag_ast(ssa_ast, label: :evaluation_run_once)
 
     {result, state} = run(ssa_ast, %__MODULE__{})
+
     {result, state} =
       if Keyword.get(opts, :remove_unused, true) do
         result
@@ -113,44 +118,51 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   def run(ast, state) do
     case ast do
       # Equals
-      {:"=", meta, [left, right]} ->
+      {:=, meta, [left, right]} ->
         {left, left_state} = run_match(left, state)
         {right, right_state} = run(right, state)
-        { block, state }  =
+
+        {block, state} =
           case Interpreter.match(left, right) do
             {_yes_or_maybe, [{new_left, new_right}]} ->
               state = if equal?(left, new_left), do: state, else: hit(state)
-              { {:=, meta, [new_left, new_right]}, put_bind(state, new_left, new_right) }
+              {{:=, meta, [new_left, new_right]}, put_bind(state, new_left, new_right)}
 
             {_yes_or_maybe, binds} ->
-              state = Enum.reduce(binds, state, fn {key, value}, state -> put_bind(state, key, value) end)
-              { {:=, meta, [left, right]}, state }
+              state =
+                Enum.reduce(binds, state, fn {key, value}, state ->
+                  put_bind(state, key, value)
+                end)
+
+              {{:=, meta, [left, right]}, state}
 
             :no ->
               q = quote do: raise(MatchError, term: unquote(right))
-              { q, hit state }
+              {q, hit(state)}
           end
 
-        { block, right_state <~ (left_state <~ state) }
+        {block, right_state <~ (left_state <~ state)}
 
       # Block
       {:__block__, _, []} = empty_block ->
-        { empty_block, state }
+        {empty_block, state}
 
       {:__block__, _, [line]} ->
-        run(line, hit state)
+        run(line, hit(state))
 
       {:__block__, meta, lines} ->
         {lines, state} =
           Enum.flat_map_reduce(lines, state, fn line, state ->
             {line, state} = run(line, state)
+
             case line do
-              {:__block__, _, lines} -> { lines, hit state }
+              {:__block__, _, lines} -> {lines, hit(state)}
               other -> {[other], state}
             end
           end)
 
         {last_line, lines} = List.pop_at(lines, -1)
+
         {lines, state} =
           Enum.flat_map_reduce(lines, state, fn line, state ->
             cond do
@@ -158,24 +170,29 @@ defmodule Tria.Optimizer.Pass.Evaluation do
                 {[line], state}
 
               is_fn(line) or vared_literal?(line) ->
-                {[], hit state}
+                {[], hit(state)}
 
               is_pure(line) and is_safe(line) ->
                 # Binds must be in the correct order
                 {_, binds} =
-                  context_prewalk(line, [], fn
-                    tri(_key = value) = match, acc, nil when is_fn(value) ->
-                      {nil, [match | acc]}
+                  context_prewalk(
+                    line,
+                    [],
+                    fn
+                      tri(_key = value) = match, acc, nil when is_fn(value) ->
+                        {nil, [match | acc]}
 
-                    tri(_key = _value) = match, acc, nil ->
-                      {match, [match | acc]}
+                      tri(_key = _value) = match, acc, nil ->
+                        {match, [match | acc]}
 
-                    the_fn, acc, _ when is_fn(the_fn) ->
-                      {nil, acc}
+                      the_fn, acc, _ when is_fn(the_fn) ->
+                        {nil, acc}
 
-                    other, acc, _ ->
-                      {other, acc}
-                  end, nil)
+                      other, acc, _ ->
+                        {other, acc}
+                    end,
+                    nil
+                  )
 
                 state =
                   state
@@ -189,25 +206,27 @@ defmodule Tria.Optimizer.Pass.Evaluation do
             end
           end)
 
-        { {:__block__, meta, lines ++ [last_line]}, state }
+        {{:__block__, meta, lines ++ [last_line]}, state}
 
       # Try
       {:try, meta, [[{:do, body} | other]]} = the_try ->
         safe_and_pure = is_pure(body) and is_safe(body)
+
         cond do
-          safe_and_pure and (other[:else] in [nil, []]) ->
+          safe_and_pure and other[:else] in [nil, []] ->
             state =
               state
               |> put_safety_and_purity(body)
               |> hit()
 
-            { body, state }
+            {body, state}
 
           safe_and_pure ->
             state =
               state
               |> put_safety_and_purity(body)
               |> hit()
+
             run({:case, meta, [body, [do: other[:else]]]}, state)
 
           true ->
@@ -217,42 +236,47 @@ defmodule Tria.Optimizer.Pass.Evaluation do
       # Receive
       {:receive, meta, [[do: clauses]]} ->
         {clauses, clauses_state} = run_clauses(clauses, state)
-        { {:receive, meta, [[do: clauses]]}, state <~> clauses_state }
+        {{:receive, meta, [[do: clauses]]}, state <~> clauses_state}
 
       {:receive, meta, [[do: clauses, after: {timeout, body}]]} ->
         {clauses, clauses_state} = run_clauses(clauses, state)
         {timeout, timeout_state} = run(timeout, state)
         {body, body_state} = run(body, timeout_state)
         state = state <~> clauses_state <~> body_state
-        { {:receive, meta, [[do: clauses, after: {timeout, body}]]}, state }
+        {{:receive, meta, [[do: clauses, after: {timeout, body}]]}, state}
 
       # Case
       {:case, meta, [arg, [do: clauses]]} ->
         {arg, state} = run(arg, state)
-        case run_clauses([arg], clauses, state, fn [arg] -> tri(raise CaseClauseError, term: arg) end) do
+
+        case run_clauses([arg], clauses, state, fn [arg] ->
+               tri(raise CaseClauseError, term: arg)
+             end) do
           {:block, block, block_state} ->
-            { block, state <~> block_state}
+            {block, state <~> block_state}
 
           {:clauses, clauses, clauses_state} ->
-            { {:case, meta, [arg, [do: clauses]]}, state <~> clauses_state}
+            {{:case, meta, [arg, [do: clauses]]}, state <~> clauses_state}
         end
 
       # Fn Inlining
-      {{:".", _dotmeta, [{:fn, _, clauses}]}, _meta, args} ->
+      {{:., _dotmeta, [{:fn, _, clauses}]}, _meta, args} ->
         state = hit(state)
         {args, args_state} = run(args, state)
 
-        case run_clauses(args, clauses, state, fn args -> tri(raise FunctionClauseError, args: args) end) do
+        case run_clauses(args, clauses, state, fn args ->
+               tri(raise FunctionClauseError, args: args)
+             end) do
           {:block, block, block_state} ->
-            { block, state <~ args_state <~> block_state }
+            {block, state <~ args_state <~> block_state}
 
           {:clauses, clauses, clauses_state} ->
             clauses =
-              Enum.map(clauses, fn {:"->", meta, [pattern, body]} ->
+              Enum.map(clauses, fn {:->, meta, [pattern, body]} ->
                 pattern =
                   case pattern do
                     [{:when, whenmeta, [args, guard]}] ->
-                      [{:when, whenmeta, [tuplify(List.wrap args), guard]}]
+                      [{:when, whenmeta, [tuplify(List.wrap(args)), guard]}]
 
                     pattern ->
                       [tuplify(pattern)]
@@ -263,13 +287,13 @@ defmodule Tria.Optimizer.Pass.Evaluation do
 
             body = [tuplify(args), [do: clauses]]
 
-            { {:case, [], body}, state <~ args_state <~> clauses_state }
+            {{:case, [], body}, state <~ args_state <~> clauses_state}
         end
 
       # Fn
       {:fn, meta, clauses} ->
         {clauses, clauses_state} = run_clauses(clauses, state)
-        { {:fn, meta, clauses}, state <~> clauses_state }
+        {{:fn, meta, clauses}, state <~> clauses_state}
 
       # Binary
       {:<<>>, meta, parts} ->
@@ -279,79 +303,82 @@ defmodule Tria.Optimizer.Pass.Evaluation do
               {ts, ts_state} =
                 traverse_specifier(ts, new_state, fn ts_input, new_state ->
                   {ts_input, state} = run(ts_input, state)
-                  { ts_input, new_state <~> state }
+                  {ts_input, new_state <~> state}
                 end)
 
               {value, value_state} = run(value, state)
-              { {:"::", meta, [value, ts]}, (new_state <~> ts_state) <~ value_state }
+              {{:"::", meta, [value, ts]}, new_state <~> ts_state <~ value_state}
 
             other, new_state ->
               {other, other_state} = run(other, state)
-              { other, new_state <~ other_state }
+              {other, new_state <~ other_state}
           end)
 
-        { {:<<>>, meta, parts}, state }
+        {{:<<>>, meta, parts}, state}
 
       # List cons
       [{:|, meta, [left, right]}] ->
         {[left, right], state} = run([left, right], state)
-        cond do
-          is_list right ->
-            { [left | right], hit state }
 
-          is_list unfolded = unfold(right, state) ->
-            { [left | unfolded ], hit state }
+        cond do
+          is_list(right) ->
+            {[left | right], hit(state)}
+
+          is_list(unfolded = unfold(right, state)) ->
+            {[left | unfolded], hit(state)}
 
           true ->
-            { [{:|, meta, [left, right]}], state }
+            {[{:|, meta, [left, right]}], state}
         end
 
       # List
       [head | tail] ->
         {head, head_state} = run(head, state)
         {tail, tail_state} = run(tail, state)
-        { [head | tail], head_state <~ tail_state }
+        {[head | tail], head_state <~ tail_state}
 
       # Twople
       {left, right} ->
         {[left, right], state} = run([left, right], state)
-        { {left, right}, state }
+        {{left, right}, state}
 
       # Tuple
       {:{}, meta, items} ->
         {items, state} = run(items, state)
-        { {:{}, meta, items}, state }
+        {{:{}, meta, items}, state}
 
       # Map cons
       {:%{}, meta, [{:|, consmeta, [map, pairs]}]} ->
         {map, map_state} = run(map, state)
         {pairs, pairs_state} = run(pairs, state)
         state = map_state <~ pairs_state
+
         case map do
           {:%{}, _, [{:|, _, [map, map_pairs]}]} ->
-            { {:%{}, meta, [{:|, consmeta, [map, map_pairs ++ pairs]}]}, hit state }
+            {{:%{}, meta, [{:|, consmeta, [map, map_pairs ++ pairs]}]}, hit(state)}
 
           {:%{}, _, map_pairs} ->
-            { {:%{}, meta, map_pairs ++ pairs}, hit state }
+            {{:%{}, meta, map_pairs ++ pairs}, hit(state)}
 
           map ->
-            { {:%{}, meta, [{:|, consmeta, [map, pairs]}]}, state }
+            {{:%{}, meta, [{:|, consmeta, [map, pairs]}]}, state}
         end
 
       # Map
       {:%{}, meta, pairs} ->
         {pairs, state} = run(pairs, state)
-        { {:%{}, meta, pairs}, state }
+        {{:%{}, meta, pairs}, state}
 
       # Variable
       variable when is_variable(variable) ->
         state = put_used(state, variable)
+
         case fetch_bind(state, variable) do
           :error ->
-            { variable, state }
+            {variable, state}
 
           {:ok, new_variable} when is_variable(new_variable) ->
-            { new_variable, hit state }
+            {new_variable, hit(state)}
 
           {:ok, the_fn} when is_fn(the_fn) ->
             # Since we propagate the `fn`, we'll need to retranslate it
@@ -362,20 +389,21 @@ defmodule Tria.Optimizer.Pass.Evaluation do
               |> SSATranslator.from_tria!()
               |> run(state)
 
-            { the_fn, hit state }
+            {the_fn, hit(state)}
 
           {:ok, other} ->
             cond do
               quoted_literal?(other) ->
-                { other, hit state }
+                {other, hit(state)}
 
               true ->
-                { variable, state }
+                {variable, state}
             end
         end
 
       # Module.function(args)
-      dot_call(module, function, args, dotmeta, meta) when is_atom(module) and is_atom(function) and is_list(args) ->
+      dot_call(module, function, args, dotmeta, meta)
+      when is_atom(module) and is_atom(function) and is_list(args) ->
         {args, state} = run(args, state)
         call = dot_call(module, function, args, dotmeta, meta)
         precompute(call, state)
@@ -383,12 +411,12 @@ defmodule Tria.Optimizer.Pass.Evaluation do
       # Other calls
       {call, meta, args} ->
         {[call, args], state} = run([call, args], state)
-        { {call, meta, args}, state }
+        {{call, meta, args}, state}
 
       # Literals
       other ->
         if quoted_literal?(other) do
-          { other, state }
+          {other, state}
         else
           Debug.inspect(other, label: :ast)
           Debug.inspect_ast(other, label: :code)
@@ -401,11 +429,11 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   Runner for clauses which generates
   """
   def run_clauses(args, clauses, state, error_fn) do
-    original_length = length clauses
+    original_length = length(clauses)
     unfolded_args = Enum.map(args, fn arg -> unfold(arg, state) end)
 
     clauses
-    |> Enum.map(fn {:"->", meta, [left, right]} ->
+    |> Enum.map(fn {:->, meta, [left, right]} ->
       {left, state} = run_match(left, state)
       {Interpreter.multimatch(left, unfolded_args), {left, state, meta, right}}
     end)
@@ -428,16 +456,18 @@ defmodule Tria.Optimizer.Pass.Evaluation do
         state = if length(binds_and_clauses) == original_length, do: state, else: hit(state)
 
         {clauses, state} =
-          Enum.map_reduce(binds_and_clauses, state, fn {{_, bindings}, {left, left_state, meta, body}}, acc_state ->
+          Enum.map_reduce(binds_and_clauses, state, fn {{_, bindings},
+                                                        {left, left_state, meta, body}},
+                                                       acc_state ->
             state = put_binds(state, bindings)
             {right, state} = run(body, state <~ left_state)
 
             case left do
               [{:when, _, _} = pattern] ->
-                { {:->, meta, [[pattern], right]}, acc_state <~> state }
+                {{:->, meta, [[pattern], right]}, acc_state <~> state}
 
               pattern ->
-                { {:->, meta, [pattern, right]}, acc_state <~> state }
+                {{:->, meta, [pattern, right]}, acc_state <~> state}
             end
           end)
 
@@ -464,18 +494,19 @@ defmodule Tria.Optimizer.Pass.Evaluation do
     state = Enum.reduce(variables, state, &put_used(&2, &1))
     state = if new_ast != ast, do: hit(state), else: state
 
-    { new_ast, state }
+    {new_ast, state}
   end
 
   def run_match(ast, state, new_state \\ %__MODULE__{}) do
     case ast do
       # Binary matching is special because pinning is not required for variables in types
-      {:"<<>>", meta, items} ->
+      {:<<>>, meta, items} ->
         {items, new_state} =
           Enum.map_reduce(items, new_state, fn
             {:"::", meta, [item, ts]}, new_state ->
               # First we just put variables into the ts part of the binary match
               merged_state = state <~ new_state
+
               {ts, ts_state} =
                 traverse_specifier(ts, merged_state, fn ts_input, merged_state ->
                   {ts_input, runned_state} = run(ts_input, merged_state)
@@ -491,7 +522,7 @@ defmodule Tria.Optimizer.Pass.Evaluation do
               run_match(item, state, new_state)
           end)
 
-        { {:"<<>>", meta, items}, new_state }
+        {{:<<>>, meta, items}, new_state}
 
       # When
       {:when, meta, pattern_and_guard} ->
@@ -501,40 +532,40 @@ defmodule Tria.Optimizer.Pass.Evaluation do
         # Since guard is not creating new variables, we can just run evaluation against it
         {guard, guard_state} = run_guard(guard, state <~ pattern_state)
 
-        { {:when, meta, patterns ++ [guard]}, pattern_state <~> guard_state }
+        {{:when, meta, patterns ++ [guard]}, pattern_state <~> guard_state}
 
       # Pin . We handle pin separately before variables
       pin(variable, meta) = pinned when is_variable(variable) ->
         case fetch_bind(state, variable) do
           :error ->
             new_state = put_used(state, variable)
-            { pinned, new_state }
+            {pinned, new_state}
 
           {:ok, val} when is_variable(val) ->
-            { pin(val, meta), new_state }
+            {pin(val, meta), new_state}
 
           {:ok, val} ->
             cond do
               quoted_literal?(val) ->
-                { val, new_state }
+                {val, new_state}
 
               vared_literal?(val) ->
-                { pin_variables(val), new_state }
+                {pin_variables(val), new_state}
 
               true ->
                 new_state = put_used(state, variable)
-                { pinned, new_state }
+                {pinned, new_state}
             end
         end
 
       # Variable
-      variable when is_variable(variable)  ->
-        { variable, new_state }
+      variable when is_variable(variable) ->
+        {variable, new_state}
 
       # Map or Tuple or Binary or matchable operators (like `<>` or `|`)
       {n, m, items} when is_list(items) ->
         {items, new_state} = run_match(items, state, new_state)
-        { {n, m, items}, new_state }
+        {{n, m, items}, new_state}
 
       # List
       items when is_list(items) ->
@@ -547,11 +578,11 @@ defmodule Tria.Optimizer.Pass.Evaluation do
         {left, new_state} = run_match(left, state, new_state)
         {right, new_state} = run_match(right, state, new_state)
 
-        { {left, right}, new_state }
+        {{left, right}, new_state}
 
       # Literal
       literal when is_literal(literal) ->
-        { literal, new_state }
+        {literal, new_state}
     end
   end
 
@@ -571,46 +602,49 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   end
 
   def run_clauses(clauses, state) do
-    Enum.map_reduce(clauses, state, fn {:"->", meta, [left, right]}, clauses_state ->
+    Enum.map_reduce(clauses, state, fn {:->, meta, [left, right]}, clauses_state ->
       {left, left_state} = run_match(left, state)
       {right, right_state} = run(right, state <~ left_state)
 
-      { {:"->", meta, [left, right]}, clauses_state <~> right_state }
+      {{:->, meta, [left, right]}, clauses_state <~> right_state}
     end)
   end
 
   ## Removing unused
 
   def run_remove_unused(ast, state) do
-    #TODO improve performance
+    # TODO improve performance
     context_prewalk(
       ast,
       state,
       fn
         tri(left = right) = ast, new_state, nil when is_variable(left) ->
-          left = unmeta left
+          left = unmeta(left)
+
           case count_used(state, left) do
-            0 -> {right, hit new_state}
+            0 -> {right, hit(new_state)}
             _ -> {ast, new_state}
           end
 
         variable, new_state, nil when is_variable(variable) ->
-          variable = unmeta variable
+          variable = unmeta(variable)
+
           with(
             1 <- count_used(state, variable),
             {:ok, value} <- fetch_bind(state, variable),
             true <- is_fn(value) or vared_literal?(value) or (is_pure(value) and is_safe(value))
           ) do
             value = SSATranslator.from_tria!(value)
+
             state =
               new_state
               |> delete_used(variable)
               |> put_safety_and_purity(value)
               |> hit()
 
-            { value, state }
+            {value, state}
           else
-            _ -> { variable, new_state }
+            _ -> {variable, new_state}
           end
 
         other, new_state, _ ->
@@ -625,23 +659,28 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   defp filter_clauses([{{:yes, _}, _} = last | _tail]) do
     [last]
   end
+
   defp filter_clauses([{:no, _} | tail]) do
     filter_clauses(tail)
   end
+
   defp filter_clauses([other | tail]), do: [other | filter_clauses(tail)]
   defp filter_clauses([]), do: []
 
   defp equal?(left, right), do: unmeta(left) == unmeta(right)
 
-  defp precompute(dot_call(module, function, args) = dc, state) when is_atom(module) and is_atom(function) do
+  defp precompute(dot_call(module, function, args) = dc, state)
+       when is_atom(module) and is_atom(function) do
     Debug.inspect_ast(dc, label: :precomputation_candidate)
     args = Enum.map(args, fn arg -> unfold(arg, state) end)
+
     with(
       true <- Enum.all?(args, &quoted_literal?/1),
       {:pure, {result, bindings}, _} <- Purity.run_analyze(dc)
     ) do
       Tracer.tag_ast(dot_call(module, function, args), label: :precomputed_from)
       Tracer.tag(result, label: :precomputed_to)
+
       try do
         # Escaping literals to Elixir's AST is safe
         # since this AST will completely reflect Tria's implementation
@@ -651,12 +690,16 @@ defmodule Tria.Optimizer.Pass.Evaluation do
       else
         result ->
           state = put_evaluated(state, dc)
+
           case bindings do
             [] ->
               {result, hit(state)}
 
             bindings ->
-              block = {:__block__, [], Enum.map(bindings, fn {key, value} -> tri(key = value) end) ++ [result]}
+              block =
+                {:__block__, [],
+                 Enum.map(bindings, fn {key, value} -> tri(key = value) end) ++ [result]}
+
               {block, hit(state)}
           end
       end
@@ -671,7 +714,7 @@ defmodule Tria.Optimizer.Pass.Evaluation do
 
   defp pin_variables(ast) do
     postwalk(ast, fn
-      variable when is_variable variable -> pin variable
+      variable when is_variable(variable) -> pin(variable)
       other -> other
     end)
   end
@@ -696,11 +739,11 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   end
 
   defp put_bind(%{bindings: bindings} = state, key, value) do
-    key = unmeta key
+    key = unmeta(key)
     # {value, _} = run_remove_unused(value, %__MODULE__{state | used: %{}})
     # value = run_while(value, state: state, remove_unused: false)
 
-    if quoted_literal? key do
+    if quoted_literal?(key) do
       state
     else
       %{state | bindings: Bindmap.put(bindings, key, value)}
@@ -719,6 +762,7 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   defp put_used(%{used: used} = state, key) do
     uid = :erlang.unique_integer([:positive])
     key = unmeta(key)
+
     used =
       case used do
         %{^key => mapset} -> %{used | key => MapSet.put(mapset, uid)}
@@ -729,11 +773,12 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   end
 
   defp delete_used(%{used: used} = state, key) do
-    %{state | used: Map.delete(used, unmeta key)}
+    %{state | used: Map.delete(used, unmeta(key))}
   end
 
   defp count_used(%{used: used}, key) do
-    key = unmeta key
+    key = unmeta(key)
+
     case used do
       %{^key => mapset} -> MapSet.size(mapset)
       _ -> 0
@@ -751,7 +796,7 @@ defmodule Tria.Optimizer.Pass.Evaluation do
   end
 
   defp left <~> right do
-    %{hit: left_hit,  bindings: left_bindings,  used: left_used, depmap: left_depmap} = left
+    %{hit: left_hit, bindings: left_bindings, used: left_used, depmap: left_depmap} = left
     %{hit: right_hit, bindings: right_bindings, used: right_used, depmap: right_depmap} = right
 
     bindings = Bindmap.merge!(left_bindings, right_bindings)
@@ -760,5 +805,4 @@ defmodule Tria.Optimizer.Pass.Evaluation do
 
     %{left | used: used, hit: left_hit or right_hit, bindings: bindings, depmap: depmap}
   end
-
 end

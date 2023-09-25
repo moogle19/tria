@@ -1,5 +1,4 @@
 defmodule Tria.Language.Binary do
-
   @moduledoc """
   Helper module for working with binary type-specifiers
   """
@@ -33,19 +32,21 @@ defmodule Tria.Language.Binary do
   @type replace_func :: (Tria.t() -> Tria.t())
 
   @doc "Checks if the variable ast is a reserved type specifier"
-  defguard is_reserved(t) when is_tuple(t) and tuple_size(t) == 3
-     and element(t, 0) in @reserved
-     and is_list(element(t, 1))
-     and (is_atom(element(t, 2)) or is_integer(element(t, 2)))
+  defguard is_reserved(t)
+           when is_tuple(t) and tuple_size(t) == 3 and
+                  element(t, 0) in @reserved and
+                  is_list(element(t, 1)) and
+                  (is_atom(element(t, 2)) or is_integer(element(t, 2)))
 
   @parametrised ~w[size unit]a
 
   @doc "Checks if the variable ast is a parametrised type specifier"
-  defguard is_parametrised(t) when is_tuple(t) and tuple_size(t) == 3
-     and element(t, 0) in @parametrised
-     and is_list(element(t, 1))
-     and is_list(element(t, 2))
-     and length(element(t, 2)) == 1
+  defguard is_parametrised(t)
+           when is_tuple(t) and tuple_size(t) == 3 and
+                  element(t, 0) in @parametrised and
+                  is_list(element(t, 1)) and
+                  is_list(element(t, 2)) and
+                  length(element(t, 2)) == 1
 
   @doc """
   Traverses inputs of the binary (all except type specifications types)
@@ -58,13 +59,13 @@ defmodule Tria.Language.Binary do
         {:"::", meta, [value, specifier]}, state ->
           {value, state} = func.(value, state)
           {specifier, state} = traverse_specifier(specifier, state, func)
-          { {:"::", meta, [value, specifier]}, state }
+          {{:"::", meta, [value, specifier]}, state}
 
         value, state ->
           func.(value, state)
       end)
 
-    { {:<<>>, meta, parts}, state }
+    {{:<<>>, meta, parts}, state}
   end
 
   @doc """
@@ -76,13 +77,13 @@ defmodule Tria.Language.Binary do
       Enum.map_reduce(parts, state, fn
         {:"::", meta, [value, specifier]}, state ->
           {value, state} = func.(value, state)
-          { {:"::", meta, [value, specifier]}, state }
+          {{:"::", meta, [value, specifier]}, state}
 
         value, state ->
           func.(value, state)
       end)
 
-    { {:<<>>, meta, parts}, state }
+    {{:<<>>, meta, parts}, state}
   end
 
   @doc """
@@ -94,13 +95,13 @@ defmodule Tria.Language.Binary do
       Enum.map_reduce(parts, state, fn
         {:"::", meta, [value, specifier]}, state ->
           {specifier, state} = traverse_specifier(specifier, state, func)
-          { {:"::", meta, [value, specifier]}, state }
+          {{:"::", meta, [value, specifier]}, state}
 
         value, state ->
-          { value, state }
+          {value, state}
       end)
 
-    { {:<<>>, meta, parts}, state }
+    {{:<<>>, meta, parts}, state}
   end
 
   @doc """
@@ -121,18 +122,17 @@ defmodule Tria.Language.Binary do
       {op, meta, [left, right]} when op in ~w[* -]a ->
         {left, state} = traverse_specifier(left, state, func)
         {right, state} = traverse_specifier(right, state, func)
-        { {op, meta, [left, right]}, state }
+        {{op, meta, [left, right]}, state}
 
       {name, meta, [arg]} = spec when is_parametrised(spec) ->
         {arg, state} = func.(arg, state)
-        { {name, meta, [arg]}, state }
+        {{name, meta, [arg]}, state}
 
       spec when is_reserved(spec) ->
-        { spec, state }
+        {spec, state}
 
       other ->
         func.(other, state)
     end
   end
-
 end

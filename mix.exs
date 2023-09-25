@@ -27,7 +27,6 @@ defmodule Tria.MixProject do
       licenses: ["GPL 3"],
       files: [
         "lib",
-
         "mix.exs",
         "README.md",
         "priv/pure.ets",
@@ -42,23 +41,27 @@ defmodule Tria.MixProject do
     ]
   end
 
-  defp elixirc_paths(env \\ Mix.env)
+  defp elixirc_paths(env \\ Mix.env())
   defp elixirc_paths(:test), do: elixirc_paths(:prod) ++ ["test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
     [
       {:mix_tester, "~> 1.0", only: :test},
-
-      {:ex_doc,   "~> 0.23.0", only: :docs, runtime: false},
-      {:dialyxir, "~> 1.0.0",  only: :dev, runtime: false},
-      {:credo,    "~> 1.1",    only: :dev, runtime: false},
-      {:rexbug,   "~> 1.0",    only: :dev, runtime: false},
+      {:ex_doc, "~> 0.23.0", only: :docs, runtime: false},
+      {:dialyxir, "~> 1.0.0", only: :dev, runtime: false},
+      {:credo, "~> 1.1", only: :dev, runtime: false},
+      {:rexbug, "~> 1.0", only: :dev, runtime: false}
     ]
   end
 
   defp commit do
-    "ref: " <> path = File.read!(".git/HEAD")
-    String.trim_trailing(File.read!(".git/#{String.trim_trailing(path)}"))
+    case File.read!(".git/HEAD") do
+      "ref: " <> path ->
+        String.trim_trailing(File.read!(".git/#{String.trim_trailing(path)}"))
+
+      other ->
+        other
+    end
   end
 end

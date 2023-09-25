@@ -1,5 +1,4 @@
 defmodule Tria.Language.Meta do
-
   @moduledoc """
   Module for working with metadata
   """
@@ -16,6 +15,7 @@ defmodule Tria.Language.Meta do
   def unmeta([head | tail]) do
     [unmeta(head) | unmeta(tail)]
   end
+
   def unmeta({left, right}), do: {unmeta(left), unmeta(right)}
   def unmeta({left, _, right}), do: {unmeta(left), [], unmeta(right)}
   def unmeta(other), do: other
@@ -24,6 +24,7 @@ defmodule Tria.Language.Meta do
   def with_meta({left, _, right}, meta) do
     {left, meta, right}
   end
+
   def with_meta(other, _), do: other
 
   @spec meta_of(Tria.t()) :: t()
@@ -34,5 +35,4 @@ defmodule Tria.Language.Meta do
   def join_meta(left, right) do
     Keyword.merge(left, right)
   end
-
 end

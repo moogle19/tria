@@ -1,5 +1,4 @@
 defmodule Tria.Compiler.AbstractTranslator do
-
   @moduledoc """
   Erlang ATF to Tria translator
   It is designed to translate ATF provided in `abstract_code` chunk
@@ -15,9 +14,10 @@ defmodule Tria.Compiler.AbstractTranslator do
   alias Tria.Language.Beam
   alias Tria.Compiler.SSATranslator
 
-  @type option :: {:as_block, boolean()}
-  | {:env, Macro.Env.t()}
-  | {:locals, [{atom(), arity()}]}
+  @type option ::
+          {:as_block, boolean()}
+          | {:env, Macro.Env.t()}
+          | {:locals, [{atom(), arity()}]}
 
   @spec from_tria(Tria.t(), Keyword.t()) :: no_return()
   def from_tria(_, _) do
@@ -32,12 +32,15 @@ defmodule Tria.Compiler.AbstractTranslator do
 
   @spec to_tria(list(), [option()] | Macro.Env.t()) :: {:ok, Tria.t(), list()}
   def to_tria(abstract, opts \\ [])
+
   def to_tria(abstract, %Macro.Env{} = env) do
     to_tria(abstract, env: env)
   end
+
   def to_tria(abstract, opts) when is_list(opts) do
-    to_tria(abstract, Map.new opts)
+    to_tria(abstract, Map.new(opts))
   end
+
   def to_tria(abstract, opts) do
     traverse_function =
       if is_list(abstract) and opts[:as_block] do
@@ -47,7 +50,7 @@ defmodule Tria.Compiler.AbstractTranslator do
       end
 
     opts
-    |> Map.take([ :locals, :env ])
+    |> Map.take([:locals, :env])
     |> with_pdict(fn ->
       tria =
         abstract
@@ -61,11 +64,12 @@ defmodule Tria.Compiler.AbstractTranslator do
     end)
   end
 
-  defp to_ssa([{:"->", _, _} | _] = clauses, opts) do
+  defp to_ssa([{:->, _, _} | _] = clauses, opts) do
     with {:fn, _, clauses} <- to_ssa({:fn, [], clauses}, opts) do
       clauses
     end
   end
+
   defp to_ssa(ast, opts), do: SSATranslator.from_tria!(ast, opts)
 
   def traverse(abstract) do
@@ -79,11 +83,11 @@ defmodule Tria.Compiler.AbstractTranslator do
 
       # Operators
       {:op, anno, op, left, right} ->
-        args = traverse [left, right]
+        args = traverse([left, right])
         traverse_op(op, anno, args)
 
       {:op, anno, op, arg} ->
-        args = traverse [arg]
+        args = traverse([arg])
         traverse_op(op, anno, args)
 
       # Case
@@ -97,7 +101,7 @@ defmodule Tria.Compiler.AbstractTranslator do
         meta = meta(anno)
 
         false_body = dot_call(:erlang, :error, [:if_clause], meta, meta)
-        [head_case | tail] = Enum.reverse traverse clauses
+        [head_case | tail] = Enum.reverse(traverse(clauses))
         last_case = arrow_to_case(head_case, false_body)
 
         tail
@@ -109,10 +113,12 @@ defmodule Tria.Compiler.AbstractTranslator do
         {:<<>>, _, bin} = traverse(bin)
         {last, heading} = List.pop_at(bin, -1)
         input = traverse(input)
-        {:for, meta(anno), [{:<<>>, meta(banno), heading ++ [{:"<-", [], [last, input]}]}, [do: traverse_block body]]}
+
+        {:for, meta(anno),
+         [{:<<>>, meta(banno), heading ++ [{:<-, [], [last, input]}]}, [do: traverse_block(body)]]}
 
       {:lc, anno, body, loops} ->
-        {:for, meta(anno), traverse(loops) ++ [[do: traverse_block body]]}
+        {:for, meta(anno), traverse(loops) ++ [[do: traverse_block(body)]]}
 
       {:block, anno, block} ->
         {:__block__, meta(anno), Enum.map(block, &traverse/1)}
@@ -123,41 +129,43 @@ defmodule Tria.Compiler.AbstractTranslator do
 
       # Maybe
       {:maybe_match, anno, left, right} ->
-        {:"<-", meta(anno), [traverse(left), traverse_block(right)]}
+        {:<-, meta(anno), [traverse(left), traverse_block(right)]}
 
       {:maybe, anno, body, {:else, _anno2, elses}} ->
-        {res, clauses} = add_res_to_clauses traverse body
-        elses = traverse elses
+        {res, clauses} = add_res_to_clauses(traverse(body))
+        elses = traverse(elses)
         {:with, meta(anno), clauses ++ [[do: res, else: elses]]}
 
       {:maybe, anno, body} ->
-        clauses = traverse body
+        clauses = traverse(body)
         {res, clauses} = add_res_to_clauses(clauses)
         {:with, meta(anno), clauses ++ [[do: res]]}
 
       # Receive
       {:receive, anno, clauses} ->
-        {:receive, meta(anno), [[do: traverse clauses]]}
+        {:receive, meta(anno), [[do: traverse(clauses)]]}
 
       {:receive, anno, [], after_what, do_what} ->
         {:receive, meta(anno), [[after: {traverse(after_what), traverse_block(do_what)}]]}
 
       {:receive, anno, clauses, after_what, do_what} ->
-        {:receive, meta(anno), [[do: traverse(clauses), after: {traverse(after_what), traverse_block(do_what)}]]}
+        {:receive, meta(anno),
+         [[do: traverse(clauses), after: {traverse(after_what), traverse_block(do_what)}]]}
 
       # Try
       {:try, anno, body, else_clauses, catch_clauses, after_body} ->
         clauses =
-          [do: traverse_block body]
-          ++ [catch: traverse_catch_clauses(catch_clauses)]
-          ++ [else: traverse else_clauses]
-          ++ [after: traverse_block after_body]
+          [do: traverse_block(body)] ++
+            [catch: traverse_catch_clauses(catch_clauses)] ++
+            [else: traverse(else_clauses)] ++
+            [after: traverse_block(after_body)]
 
-        cleanup_try {:try, meta(anno), [clauses]}
+        cleanup_try({:try, meta(anno), [clauses]})
 
       {:catch, anno, body} ->
-        #TODO maybe this is wrong
-        body = traverse_block body
+        # TODO maybe this is wrong
+        body = traverse_block(body)
+
         tri do
           try do
             body
@@ -166,24 +174,24 @@ defmodule Tria.Compiler.AbstractTranslator do
             :throw, any -> any
           end
         end
-        |> with_meta(meta anno)
+        |> with_meta(meta(anno))
         |> cleanup_try()
 
       {:generate, anno, left, right} ->
-        {:"<-", meta(anno), [traverse(left), traverse(right)]}
+        {:<-, meta(anno), [traverse(left), traverse(right)]}
 
       {:b_generate, anno, left, right} ->
-        {:"<-", meta(anno), [traverse(left), traverse(right)]}
+        {:<-, meta(anno), [traverse(left), traverse(right)]}
 
       # Binary
       {:bin, anno, elements} ->
         # Why flatten?
-        {:"<<>>", meta(anno), List.flatten traverse(elements)}
+        {:<<>>, meta(anno), List.flatten(traverse(elements))}
 
       {:bin_element, anno, expr, :default, :default} ->
         expr
         |> traverse()
-        |> with_meta(meta anno)
+        |> with_meta(meta(anno))
 
       {:bin_element, anno, expr, :default, tsl} ->
         {:"::", meta(anno), [traverse(expr), traverse_tsl(tsl)]}
@@ -193,9 +201,10 @@ defmodule Tria.Compiler.AbstractTranslator do
 
       # Binary comprehension
       {:bc, anno, element, qualifiers} ->
-        #FIXME this is correct translation, but Tria does not expect any `for`s inside the code
+        # FIXME this is correct translation, but Tria does not expect any `for`s inside the code
         # therefore we need to change it to something better
-        {:for, meta(anno), [{:<<>>, meta(anno), traverse(qualifiers)}, [into: "", do: traverse(element)]]}
+        {:for, meta(anno),
+         [{:<<>>, meta(anno), traverse(qualifiers)}, [into: "", do: traverse(element)]]}
 
       # Charlist
       {:string, _anno, list} ->
@@ -205,12 +214,13 @@ defmodule Tria.Compiler.AbstractTranslator do
       {:cons, anno, head, tail} ->
         tail = traverse(tail)
         head = traverse(head)
+
         case tail do
           list when is_list(list) ->
             [head | tail]
 
           other ->
-            [{:"|", meta(anno), [head, other]}]
+            [{:|, meta(anno), [head, other]}]
         end
 
       # Map
@@ -220,38 +230,38 @@ defmodule Tria.Compiler.AbstractTranslator do
             {:map_field_assoc, _anno, key, value} ->
               {traverse(key), traverse(value)}
 
-            {:map_field_exact,  anno, key, value} ->
+            {:map_field_exact, anno, key, value} ->
               key = pin(traverse(key), anno)
               {key, traverse(value)}
           end)
 
-        {:"%{}", meta(anno), items}
+        {:%{}, meta(anno), items}
 
       {:map, anno, original, items} ->
-        #TODO optimize map generation for all map_field_exact
+        # TODO optimize map generation for all map_field_exact
         items
         |> Enum.reduce(traverse(original), fn
-          {:map_field_exact, _anno, key, value}, {:"%{}", meta, [{:"|", consmeta, [acc, pairs]}]} ->
-            {:"%{}", meta, [{:"|", consmeta, [acc, pairs ++ [{traverse(key), traverse(value)}]]}]}
+          {:map_field_exact, _anno, key, value}, {:%{}, meta, [{:|, consmeta, [acc, pairs]}]} ->
+            {:%{}, meta, [{:|, consmeta, [acc, pairs ++ [{traverse(key), traverse(value)}]]}]}
 
           {:map_field_exact, anno, key, value}, acc ->
-            {:"%{}", [], [{:"|", meta(anno), [acc, [{traverse(key), traverse(value)}]]}]}
+            {:%{}, [], [{:|, meta(anno), [acc, [{traverse(key), traverse(value)}]]}]}
 
           {:map_field_assoc, anno, key, value}, acc ->
             dot_call(Map, :put, [acc, traverse(key), traverse(value)], meta(anno), meta(anno))
         end)
-        |> with_meta(meta anno)
+        |> with_meta(meta(anno))
 
       # Tuple
       {:tuple, _anno, [left, right]} ->
         {traverse(left), traverse(right)}
 
       {:tuple, anno, items} ->
-        {:"{}", meta(anno), Enum.map(items, &traverse/1)}
+        {:{}, meta(anno), Enum.map(items, &traverse/1)}
 
       # Functions, funs and calls
       {:fun, anno, {:function, name, arity}} when is_atom(name) and is_integer(arity) ->
-        meta = meta anno
+        meta = meta(anno)
         args = gen_uniq_vars(arity)
 
         body =
@@ -260,15 +270,16 @@ defmodule Tria.Compiler.AbstractTranslator do
             module -> dot_call(module, name, args, meta, meta)
           end
 
-        {:fn, meta, [{:"->", meta, [args, body]}]}
+        {:fn, meta, [{:->, meta, [args, body]}]}
 
       {:fun, anno, {:function, module, function, arity}} ->
-        meta = meta anno
-        case traverse [module, function, arity] do
+        meta = meta(anno)
+
+        case traverse([module, function, arity]) do
           [module, function, arity] when is_atom(function) and is_integer(arity) ->
             args = gen_uniq_vars(arity)
             call = dot_call(module, function, args, meta, meta)
-            {:fn, meta, [{:"->", meta, [args, call]}]}
+            {:fn, meta, [{:->, meta, [args, call]}]}
 
           [module, function, arity] ->
             dot_call(Function, :capture, [module, function, arity], meta, meta)
@@ -279,26 +290,28 @@ defmodule Tria.Compiler.AbstractTranslator do
         # Erlang is not statically assigned. `fun()` arguments shadow
         # existing variables. Therefore, we change names of variables
         # defined in arguments of functions
-        {:fn, meta(anno), traverse clauses}
-        # |> SSATranslator.from_tria!()
+        {:fn, meta(anno), traverse(clauses)}
+
+      # |> SSATranslator.from_tria!()
 
       {:named_fun, anno, name, clauses} ->
-        #FIXME this one is absolutely incorrect
-        var = traverse name
-        fun = traverse {:fun, 0, {:clauses, clauses}}
+        # FIXME this one is absolutely incorrect
+        var = traverse(name)
+        fun = traverse({:fun, 0, {:clauses, clauses}})
         {:=, meta(anno), [var, fun]}
 
       {:call, anno, {:remote, dotanno, module, func}, args} ->
-        m = meta anno
-        dotm = meta dotanno
+        m = meta(anno)
+        dotm = meta(dotanno)
         dot_call(traverse(module), traverse(func), traverse(args), dotm, m)
 
       {:call, anno, func, args} ->
-        meta = meta anno
+        meta = meta(anno)
         args = traverse(args)
+
         case traverse(func) do
           func when is_atom(func) ->
-            case module_for_fa(func, length args) do
+            case module_for_fa(func, length(args)) do
               nil -> {func, meta, args}
               module -> dot_call(module, func, args, meta, meta)
             end
@@ -313,16 +326,17 @@ defmodule Tria.Compiler.AbstractTranslator do
 
       # Clauses
       {:clause, anno, left, [], right} ->
-        {:"->", meta(anno), [traverse(left), traverse_block(right)]}
+        {:->, meta(anno), [traverse(left), traverse_block(right)]}
 
       {:clause, anno, left, guards, right} ->
         guard = traverse_guards(guards)
         left = traverse(left)
 
-        {:"->", meta(anno), [
-          [{:when, [], left ++ [guard]}],
-          traverse_block(right)
-        ]}
+        {:->, meta(anno),
+         [
+           [{:when, [], left ++ [guard]}],
+           traverse_block(right)
+         ]}
 
       # Literals and atoms
       {k, _anno, atom} when k in ~w[float integer atom char]a ->
@@ -350,13 +364,14 @@ defmodule Tria.Compiler.AbstractTranslator do
   defp traverse_catch_clauses(clauses) when is_list(clauses) do
     clauses
     |> traverse()
-    |> Enum.map(fn {:"->", meta, [[pattern], body]} ->
+    |> Enum.map(fn {:->, meta, [[pattern], body]} ->
       case pattern do
-        tri {type, exception, stacktrace} when guards ->
-          {:"->", meta, [[{:when, [], [type, exception, guards]}], replace_stacktrace(body, stacktrace)]}
+        tri({type, exception, stacktrace} when guards) ->
+          {:->, meta,
+           [[{:when, [], [type, exception, guards]}], replace_stacktrace(body, stacktrace)]}
 
-        tri {type, exception, stacktrace} ->
-          {:"->", meta, [[type, exception], replace_stacktrace(body, stacktrace)]}
+        tri({type, exception, stacktrace}) ->
+          {:->, meta, [[type, exception], replace_stacktrace(body, stacktrace)]}
       end
     end)
   end
@@ -405,16 +420,17 @@ defmodule Tria.Compiler.AbstractTranslator do
   defp atomify_varname(name) when is_binary(name) do
     name |> String.trim_leading("_") |> String.to_atom()
   end
+
   defp atomify_varname(name) when is_atom(name), do: name
 
   defp traverse_guards(guards) do
     join(guards, :when, fn guard_tests ->
-      join(guard_tests, {:".", [], [:erlang, :andalso]}, &traverse_guard/1)
+      join(guard_tests, {:., [], [:erlang, :andalso]}, &traverse_guard/1)
     end)
   end
 
   # Used for translation of Erlang `if`
-  defp arrow_to_case({:"->", _, [[{:when, _, [pattern, guards]}], right]}, false_body) do
+  defp arrow_to_case({:->, _, [[{:when, _, [pattern, guards]}], right]}, false_body) do
     tri do
       case pattern do
         true when guards -> right
@@ -422,7 +438,8 @@ defmodule Tria.Compiler.AbstractTranslator do
       end
     end
   end
-  defp arrow_to_case({:"->", _, [[{:when, _, [guards]}], right]}, false_body) do
+
+  defp arrow_to_case({:->, _, [[{:when, _, [guards]}], right]}, false_body) do
     tri do
       case [] do
         _ when guards -> right
@@ -430,7 +447,8 @@ defmodule Tria.Compiler.AbstractTranslator do
       end
     end
   end
-  defp arrow_to_case({:"->", _, [[left], right]}, false_body) do
+
+  defp arrow_to_case({:->, _, [[left], right]}, false_body) do
     tri do
       case left do
         true -> right
@@ -445,8 +463,9 @@ defmodule Tria.Compiler.AbstractTranslator do
   defp traverse_block(line), do: traverse(line)
 
   defp traverse_tsl(tsl) when is_list(tsl) do
-    join(tsl, :"-", &traverse_tsl/1)
+    join(tsl, :-, &traverse_tsl/1)
   end
+
   defp traverse_tsl({type, size}), do: {type, [], [traverse(size)]}
   defp traverse_tsl(type) when is_atom(type), do: {type, [], nil}
   defp traverse_tsl(size) when is_integer(size), do: size
@@ -462,37 +481,37 @@ defmodule Tria.Compiler.AbstractTranslator do
   ### Operators
 
   @op_map %{
-    ==:      {Kernel,  :==},
-    "/=":    {Kernel,  :!=},
-    "=<":    {Kernel,  :<=},
-    >=:      {Kernel,  :>=},
-    <:       {Kernel,  :<},
-    >:       {Kernel,  :>},
-    "=:=":   {Kernel,  :===},
-    "=/=":   {Kernel,  :!==},
-    +:       {Kernel,  :+},
-    -:       {Kernel,  :-},
-    *:       {Kernel,  :*},
-    /:       {Kernel,  :/},
-    div:     {Kernel,  :div},
-    rem:     {Kernel,  :rem},
-    not:     {Kernel,  :not},
+    ==: {Kernel, :==},
+    "/=": {Kernel, :!=},
+    "=<": {Kernel, :<=},
+    >=: {Kernel, :>=},
+    <: {Kernel, :<},
+    >: {Kernel, :>},
+    "=:=": {Kernel, :===},
+    "=/=": {Kernel, :!==},
+    +: {Kernel, :+},
+    -: {Kernel, :-},
+    *: {Kernel, :*},
+    /: {Kernel, :/},
+    div: {Kernel, :div},
+    rem: {Kernel, :rem},
+    not: {Kernel, :not},
     # orelse:  {Kernel,  :or},
     # andalso: {Kernel,  :and},
-    orelse:  {:erlang, :orelse},
+    orelse: {:erlang, :orelse},
     andalso: {:erlang, :andalso},
-    and:     {:erlang, :and},
-    or:      {:erlang, :or},
-    xor:     {:erlang, :xor},
-    ++:      {Kernel,  :++},
-    --:      {Kernel,  :--},
-    !:       {Kernel,  :send},
-    band:    {Bitwise, :&&&},
-    bor:     {Bitwise, :|||},
-    bxor:    {Bitwise, :^^^},
-    bsl:     {Bitwise, :<<<},
-    bsr:     {Bitwise, :>>>},
-    bnot:    {Bitwise, :~~~},
+    and: {:erlang, :and},
+    or: {:erlang, :or},
+    xor: {:erlang, :xor},
+    ++: {Kernel, :++},
+    --: {Kernel, :--},
+    !: {Kernel, :send},
+    band: {Bitwise, :&&&},
+    bor: {Bitwise, :|||},
+    bxor: {Bitwise, :"^^^"},
+    bsl: {Bitwise, :<<<},
+    bsr: {Bitwise, :>>>},
+    bnot: {Bitwise, :"~~~"}
   }
 
   defp traverse_op(op, anno, args) do
@@ -503,7 +522,7 @@ defmodule Tria.Compiler.AbstractTranslator do
   ### Guards
 
   defp traverse_guard(guard) do
-    traverse guard
+    traverse(guard)
   end
 
   ### Exceptions
@@ -521,6 +540,7 @@ defmodule Tria.Compiler.AbstractTranslator do
   end
 
   defp replace_stacktrace(body, {:_, _, _context}), do: body
+
   defp replace_stacktrace(body, {name, _, context}) do
     prewalk(body, fn
       {^name, _, ^context} -> quote do: __STACKTRACE__
@@ -531,9 +551,11 @@ defmodule Tria.Compiler.AbstractTranslator do
   ### Metadata
 
   def meta(line) when is_integer(line), do: [line: line]
+
   def meta({line, column}) do
     [line: line, column: column]
   end
+
   def meta(keyword) when is_list(keyword) do
     keyword
     |> Keyword.drop(~w[record text]a)
@@ -551,6 +573,7 @@ defmodule Tria.Compiler.AbstractTranslator do
   defp with_meta({one, [], two}, meta) do
     {one, meta, two}
   end
+
   defp with_meta(other, _), do: other
 
   ### General helpers
@@ -563,11 +586,12 @@ defmodule Tria.Compiler.AbstractTranslator do
   end
 
   defp join([head], _op, f), do: f.(head)
+
   defp join([head | tail], op, f) do
     {op, [], [f.(head), join(tail, op, f)]}
   end
 
-  defp pin(var, anno) when is_variable(var), do: {:"^", meta(anno), [var]}
+  defp pin(var, anno) when is_variable(var), do: {:^, meta(anno), [var]}
   defp pin(other, anno), do: with_meta(other, meta(anno))
 
   defp erlang_funcs do
@@ -589,12 +613,14 @@ defmodule Tria.Compiler.AbstractTranslator do
   end
 
   defp module_for_fa(function, arity) do
-    module_for_fa {function, arity}
+    module_for_fa({function, arity})
   end
+
   defp module_for_fa({function, arity} = farity) when is_atom(function) and is_integer(arity) do
     cond do
       farity in Process.get(:locals, []) ->
-        nil # Process.get(:env, [])[:module]
+        # Process.get(:env, [])[:module]
+        nil
 
       farity in erlang_funcs() ->
         :erlang

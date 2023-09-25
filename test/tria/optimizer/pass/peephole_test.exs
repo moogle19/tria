@@ -1,5 +1,4 @@
 defmodule Tria.Optimizer.Pass.PeepholeTest do
-
   use ExUnit.Case, async: true
 
   import Tria.TestHelpers
@@ -25,7 +24,8 @@ defmodule Tria.Optimizer.Pass.PeepholeTest do
 
     test "Not possible" do
       abstract [map] do
-        map.self # if map == Kernel, this can be a call
+        # if map == Kernel, this can be a call
+        map.self
       end
       |> run_while()
       |> assert_tri do
@@ -35,5 +35,4 @@ defmodule Tria.Optimizer.Pass.PeepholeTest do
       end
     end
   end
-
 end

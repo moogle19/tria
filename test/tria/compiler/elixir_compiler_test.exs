@@ -10,7 +10,7 @@ defmodule Tria.Compiler.ElixirCompilerTest do
       |> Macro.to_string()
       |> Code.format_string!()
 
-    filename = Path.join System.tmp_dir!(), "file_#{:erlang.unique_integer([:positive])}"
+    filename = Path.join(System.tmp_dir!(), "file_#{:erlang.unique_integer([:positive])}")
     File.write!(filename, string)
     on_exit(fn -> File.rm(filename) end)
     filename
@@ -19,9 +19,9 @@ defmodule Tria.Compiler.ElixirCompilerTest do
   defp purge_modules(modules) do
     on_exit(fn ->
       for module <- modules do
-        :code.soft_purge module
-        :code.delete module
-        :code.purge module
+        :code.soft_purge(module)
+        :code.delete(module)
+        :code.purge(module)
       end
     end)
   end
@@ -32,6 +32,7 @@ defmodule Tria.Compiler.ElixirCompilerTest do
         quote do
           defmodule X do
             Regex
+
             defmodule Y do
               def f(x) do
                 Map.get(x, :x)
@@ -42,6 +43,7 @@ defmodule Tria.Compiler.ElixirCompilerTest do
           defmodule Z do
             def g(x) do
               Module
+
               unless x == 2 do
                 IO.puts(x)
               end
@@ -50,31 +52,32 @@ defmodule Tria.Compiler.ElixirCompilerTest do
         end
         |> ElixirCompiler.compile_quoted(trace_deps: true, file: "the_file.ex")
 
-      assert { {X, nil, 0},   {Regex, nil, 0}      } in graphs.depends
-      assert { {X.Y, nil, 0}, {Regex, nil, 0}      } in graphs.depends
-      assert { {Z, nil, 0},   {Regex, nil, 0}      } in graphs.depends
+      assert {{X, nil, 0}, {Regex, nil, 0}} in graphs.depends
+      assert {{X.Y, nil, 0}, {Regex, nil, 0}} in graphs.depends
+      assert {{Z, nil, 0}, {Regex, nil, 0}} in graphs.depends
 
-      refute { {Z, nil, 0},   {Module, nil, 0}     } in graphs.depends
-      refute { {Z, :g, 1},    {Module, nil, 0}     } in graphs.depends
+      refute {{Z, nil, 0}, {Module, nil, 0}} in graphs.depends
+      refute {{Z, :g, 1}, {Module, nil, 0}} in graphs.depends
 
-      assert { {X.Y, :f, 1},  {Map, :get, 2}       } in graphs.calls
-      refute { {X.Y, :f, 1},  {Map, :get, 2}       } in graphs.depends
-      refute { {X.Y, nil, 0}, {Map, :get, 2}       } in graphs.depends
+      assert {{X.Y, :f, 1}, {Map, :get, 2}} in graphs.calls
+      refute {{X.Y, :f, 1}, {Map, :get, 2}} in graphs.depends
+      refute {{X.Y, nil, 0}, {Map, :get, 2}} in graphs.depends
 
-      assert { {Z, :g, 1},    {Kernel, :unless, 2} } in graphs.depends
-      assert { {Z, :g, 1},    {IO, :puts, 1}       } in graphs.calls
-      refute { {Z, :g, 1},    {IO, :puts, 1}       } in graphs.depends
-      refute { {Z, nil, 1},   {IO, :puts, 1}       } in graphs.calls
+      assert {{Z, :g, 1}, {Kernel, :unless, 2}} in graphs.depends
+      assert {{Z, :g, 1}, {IO, :puts, 1}} in graphs.calls
+      refute {{Z, :g, 1}, {IO, :puts, 1}} in graphs.depends
+      refute {{Z, nil, 1}, {IO, :puts, 1}} in graphs.calls
 
-      purge_modules [X, X.Y, Z]
+      purge_modules([X, X.Y, Z])
     end
 
     test "parallel_compile" do
       a =
         quote do
           Map
+
           defmodule A do
-            def f x do
+            def f(x) do
               Regex
               x + 1
             end
@@ -86,7 +89,8 @@ defmodule Tria.Compiler.ElixirCompilerTest do
         quote do
           defmodule B do
             Regex
-            def f y do
+
+            def f(y) do
               y + 2
             end
           end
@@ -95,16 +99,16 @@ defmodule Tria.Compiler.ElixirCompilerTest do
 
       {_, graphs} = ElixirCompiler.parallel_compile([a, b], trace_deps: true)
 
-      assert { {A, nil, 0}, {Map, nil, 0}   } in graphs.depends
-      refute { {B, nil, 0}, {Map, nil, 0}   } in graphs.depends
+      assert {{A, nil, 0}, {Map, nil, 0}} in graphs.depends
+      refute {{B, nil, 0}, {Map, nil, 0}} in graphs.depends
 
-      assert { {B, nil, 0}, {Regex, nil, 0} } in graphs.depends
-      refute { {A, nil, 0}, {Regex, nil, 0} } in graphs.depends
+      assert {{B, nil, 0}, {Regex, nil, 0}} in graphs.depends
+      refute {{A, nil, 0}, {Regex, nil, 0}} in graphs.depends
 
-      assert { {A, :f, 1},  {Kernel, :+, 2} } in graphs.calls
-      assert { {B, :f, 1},  {Kernel, :+, 2} } in graphs.calls
+      assert {{A, :f, 1}, {Kernel, :+, 2}} in graphs.calls
+      assert {{B, :f, 1}, {Kernel, :+, 2}} in graphs.calls
 
-      purge_modules [A, B]
+      purge_modules([A, B])
     end
   end
 end

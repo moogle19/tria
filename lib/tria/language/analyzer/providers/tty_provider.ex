@@ -1,5 +1,4 @@
 defmodule Tria.Language.Analyzer.TTYProvider do
-
   @moduledoc """
   Purity Provider which reads the purity information from stdin.
   It's a singleton server to make sure that only one question is
@@ -54,7 +53,7 @@ defmodule Tria.Language.Analyzer.TTYProvider do
         false
 
       "s" when not is_empty(stack) ->
-        Enum.each(stack, fn {m, f, a} -> IO.puts "#{m}.#{f}/#{a}" end)
+        Enum.each(stack, fn {m, f, a} -> IO.puts("#{m}.#{f}/#{a}") end)
         ask(trait, mfa, opts)
 
       "S" ->
@@ -63,6 +62,7 @@ defmodule Tria.Language.Analyzer.TTYProvider do
         |> Beam.abstract_code!()
         |> Beam.tria(mfa)
         |> inspect_ast(label: :show)
+
         ask(trait, mfa, opts)
 
       _ ->
@@ -71,11 +71,10 @@ defmodule Tria.Language.Analyzer.TTYProvider do
   end
 
   defp prompt(trait, {m, f, a}, %{stack: stack}) when not is_empty(stack) do
-    "\n#{ast_to_string {{:".", [], [m, f]}, [], a}}\n\nIs #{trait}? [y(yes); n(no); S(show); s(stack)] "
+    "\n#{ast_to_string({{:., [], [m, f]}, [], a})}\n\nIs #{trait}? [y(yes); n(no); S(show); s(stack)] "
   end
 
   defp prompt(trait, {m, f, a}, _) do
-    "\n#{ast_to_string {{:".", [], [m, f]}, [], a}}\n\nIs #{trait}? [y(yes); n(no); S(show)] "
+    "\n#{ast_to_string({{:., [], [m, f]}, [], a})}\n\nIs #{trait}? [y(yes); n(no); S(show)] "
   end
-
 end

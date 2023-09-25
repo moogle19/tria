@@ -9,7 +9,7 @@ defmodule Tria.Optimizer.Pass.EnumFusionTest do
   alias Tria.Compiler.AbstractTranslator
 
   defp run_while(tria) do
-    EnumFusion.run_while tria
+    EnumFusion.run_while(tria)
   end
 
   @tri_opts to_tria: :force, meta: false
@@ -35,7 +35,7 @@ defmodule Tria.Optimizer.Pass.EnumFusionTest do
       abstract do
         for x <- [1, 2, 3, 4, 5], do: x + 1
       end
-      |> AbstractTranslator.to_tria!(as_block: :true)
+      |> AbstractTranslator.to_tria!(as_block: true)
       |> run_while()
       |> assert_tri do
         Enum.map([1, 2, 3, 4, 5], fn x -> Kernel.+(x, 1) end)
@@ -46,10 +46,10 @@ defmodule Tria.Optimizer.Pass.EnumFusionTest do
       abstract do
         for x <- [1, 2, 3, 4, 5], x > 3, do: x + 1
       end
-      |> AbstractTranslator.to_tria!(as_block: :true)
+      |> AbstractTranslator.to_tria!(as_block: true)
       |> run_while()
       |> assert_tri do
-        :lists.reverse Enum.reduce([1, 2, 3, 4, 5], [], _)
+        :lists.reverse(Enum.reduce([1, 2, 3, 4, 5], [], _))
       end
     end
   end
@@ -95,7 +95,9 @@ defmodule Tria.Optimizer.Pass.EnumFusionTest do
       end
       |> run_while()
       |> assert_tri do
-        Enum.reduce([1, 2, 3], %{}, fn key, acc -> Map.update(acc, key, 1, fn x -> Kernel.+(x, 1) end) end)
+        Enum.reduce([1, 2, 3], %{}, fn key, acc ->
+          Map.update(acc, key, 1, fn x -> Kernel.+(x, 1) end)
+        end)
       end
     end
   end
@@ -183,7 +185,7 @@ defmodule Tria.Optimizer.Pass.EnumFusionTest do
         end)
       end
 
-      assert_unique [x1, x2]
+      assert_unique([x1, x2])
     end
 
     test "map and each" do
@@ -201,7 +203,7 @@ defmodule Tria.Optimizer.Pass.EnumFusionTest do
         end)
       end
 
-      assert_unique [x1, x2]
+      assert_unique([x1, x2])
     end
 
     test "flat_map and flat_map" do
@@ -260,7 +262,7 @@ defmodule Tria.Optimizer.Pass.EnumFusionTest do
         end)
       end
 
-      assert_unique [x1, x2]
+      assert_unique([x1, x2])
     end
 
     test "filter and reduce" do

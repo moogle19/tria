@@ -1,5 +1,4 @@
 defmodule Tria.Language.Interpreter do
-
   @moduledoc """
   Helpers for partial interpreting of Tria's code
   #TODO: multimatching_clause handle matcheds
@@ -24,10 +23,11 @@ defmodule Tria.Language.Interpreter do
   import Tria.Language.Guard
   import Matchlist, only: [is_map_match: 1, is_empty: 1]
 
-  @type eval_result :: {:ok, {any(), Matchlist.t()}}
-  | {:error, Exception.t()}
-  | {:exit, any()}
-  | {:thrown, any()}
+  @type eval_result ::
+          {:ok, {any(), Matchlist.t()}}
+          | {:error, Exception.t()}
+          | {:exit, any()}
+          | {:thrown, any()}
 
   @doc """
   Evaluates quoted code in a separate isolated process and returns result or raises
@@ -47,17 +47,18 @@ defmodule Tria.Language.Interpreter do
     # So no Task or anything like this, plain `spawn`
     ref = make_ref()
     caller = self()
+
     pid =
-      spawn fn ->
+      spawn(fn ->
         result = eval_local(quoted, matchlist)
         send(caller, {ref, result})
-      end
+      end)
 
     receive do
       {^ref, result} ->
         result
-
-      after timeout ->
+    after
+      timeout ->
         Process.exit(pid, :kill)
         raise "Timeout on evaluation"
     end
@@ -72,14 +73,17 @@ defmodule Tria.Language.Interpreter do
     # This is just more efficient and easy to understand
     quoted =
       quote do
-        unquote Matchlist.to_quoted matchlist
-        unquote quoted
+        unquote(Matchlist.to_quoted(matchlist))
+        unquote(quoted)
       end
       |> ElixirTranslator.from_tria()
 
     try do
       {result, binds} = Code.eval_quoted(quoted, [])
-      {:ok, {result, Enum.map(binds, fn {{name, ctx}, value} -> {{name, [], ctx}, Macro.escape(value)} end)}}
+
+      {:ok,
+       {result,
+        Enum.map(binds, fn {{name, ctx}, value} -> {{name, [], ctx}, Macro.escape(value)} end)}}
     rescue
       error -> {:error, error}
     catch
@@ -95,16 +99,18 @@ defmodule Tria.Language.Interpreter do
   """
   @spec multimatch([Tria.t()], [Tria.t()]) :: {:yes | :maybe, Matchlist.t()} | :no
   def multimatch([left], [right]), do: match(left, right)
+
   def multimatch([{:when, _, [lefts]}], right) do
     {guard, left} = List.pop_at(lefts, -1)
-    right = List.wrap right
-    left  = tri {tri_splicing left} when tri(guard)
-    right = tri {tri_splicing right}
+    right = List.wrap(right)
+    left = tri({tri_splicing(left)} when tri(guard))
+    right = tri({tri_splicing(right)})
     match(left, right)
   end
+
   def multimatch(left, right) when is_list(left) and is_list(right) do
-    left  = tri {tri_splicing left}
-    right = tri {tri_splicing right}
+    left = tri({tri_splicing(left)})
+    right = tri({tri_splicing(right)})
     match(left, right)
   end
 
@@ -122,10 +128,11 @@ defmodule Tria.Language.Interpreter do
         {check_guards(guards, bindmap) && level, matches}
 
       _ ->
-        #FIXME
+        # FIXME
         :no
     end
   end
+
   def match(other, ast, _bindmap), do: match(other, ast)
 
   # When
@@ -160,9 +167,10 @@ defmodule Tria.Language.Interpreter do
         {:maybe, matches}
 
       _ ->
-        #FIXME
+        # FIXME
         :no
     end
+
     # raise "Not implemented"
     # with {level, matches} <- match(pattern) do
     #   {level, matches} && match_when?(matches, conditions)
@@ -194,10 +202,12 @@ defmodule Tria.Language.Interpreter do
   def match({left_pattern, right_pattern}, {left_ast, right_ast}) do
     merge(match(left_pattern, left_ast), match(right_pattern, right_ast))
   end
-  def match({left_pattern, right_pattern}, {:"{}", _, [left_ast, right_ast]}) do
+
+  def match({left_pattern, right_pattern}, {:{}, _, [left_ast, right_ast]}) do
     merge(match(left_pattern, left_ast), match(right_pattern, right_ast))
   end
-  def match({:"{}", _, [left_pattern, right_pattern]}, {left_ast, right_ast}) do
+
+  def match({:{}, _, [left_pattern, right_pattern]}, {left_ast, right_ast}) do
     merge(match(left_pattern, left_ast), match(right_pattern, right_ast))
   end
 
@@ -216,14 +226,14 @@ defmodule Tria.Language.Interpreter do
 
   # Binary
   def match({:<<>>, _, _patterns} = left, {:<<>>, _, _asts} = right) do
-    IO.warn "Binary matching is not implemented"
-    {:maybe, Matchlist.new([ {left, right} ])}
+    IO.warn("Binary matching is not implemented")
+    {:maybe, Matchlist.new([{left, right}])}
   end
 
   # Map
-  def match({:%{}, _, _patterns} = left, {:%{}, _, [{:"|", _, _kvs}]} = right) do
-    #TODO do some checks please
-    {:maybe, Matchlist.new([ {left, right} ])}
+  def match({:%{}, _, _patterns} = left, {:%{}, _, [{:|, _, _kvs}]} = right) do
+    # TODO do some checks please
+    {:maybe, Matchlist.new([{left, right}])}
   end
 
   # Single key map is just matching like a tuple
@@ -235,7 +245,7 @@ defmodule Tria.Language.Interpreter do
   # But it is just a ton of nasty logic, we need to think of a way to overcome this
   def match({:%{}, _, patterns}, {:%{}, _, asts}) do
     # When there are more patterns than non patterns, it is hard to get
-    if length(patterns) > length(asts), do: throw :no
+    if length(patterns) > length(asts), do: throw(:no)
 
     literal_keys = fn list ->
       Enum.split_with(list, fn {k, _} -> quoted_literal?(k) end)
@@ -247,7 +257,8 @@ defmodule Tria.Language.Interpreter do
     literal_ast = Map.new(literal_ast)
 
     {level_binds, hopes} =
-      Enum.reduce_while(literal_pattern, {{:yes, Matchlist.empty()}, patterns}, fn {key, pattern}, {acc, hopes} ->
+      Enum.reduce_while(literal_pattern, {{:yes, Matchlist.empty()}, patterns}, fn {key, pattern},
+                                                                                   {acc, hopes} ->
         case literal_ast do
           %{^key => value} ->
             {merge(acc, match(pattern, value)), hopes}
@@ -271,7 +282,7 @@ defmodule Tria.Language.Interpreter do
         :no
 
       true ->
-        merge({:maybe, [{ {:"%{}", [], hopes}, {:"%{}", [], asts} }]}, level_binds)
+        merge({:maybe, [{{:%{}, [], hopes}, {:%{}, [], asts}}]}, level_binds)
     end
   catch
     :no -> :no
@@ -286,12 +297,13 @@ defmodule Tria.Language.Interpreter do
   end
 
   # Variables
-  def match(tri(^_) = pinned, value), do:                   {:maybe, Matchlist.new [ {pinned, value} ]}
-  def match({:_, _, _} = var, _) when is_variable(var), do: {:yes,   Matchlist.empty() }
-  def match(var, value) when is_variable(var), do:          {:yes,   Matchlist.new [ {var, value} ]}
-  def match(pattern, var) when is_variable(var), do:        {:maybe, Matchlist.new [ {pattern, var} ]}
+  def match(tri(^_) = pinned, value), do: {:maybe, Matchlist.new([{pinned, value}])}
+  def match({:_, _, _} = var, _) when is_variable(var), do: {:yes, Matchlist.empty()}
+  def match(var, value) when is_variable(var), do: {:yes, Matchlist.new([{var, value}])}
+  def match(pattern, var) when is_variable(var), do: {:maybe, Matchlist.new([{pattern, var}])}
 
-  def match(pattern, {_, _, l} = val) when is_list(l), do:  {:maybe, Matchlist.new [ {pattern, val} ]}
+  def match(pattern, {_, _, l} = val) when is_list(l),
+    do: {:maybe, Matchlist.new([{pattern, val}])}
 
   # Literals
   def match(same, same), do: {:yes, Matchlist.empty()}
@@ -300,9 +312,11 @@ defmodule Tria.Language.Interpreter do
   # Helpers
 
   # Merges two match results together
-  defp merge({left_level, left_matches}, {right_level, right_matches}) when is_empty(left_matches) or is_empty(right_matches) do
+  defp merge({left_level, left_matches}, {right_level, right_matches})
+       when is_empty(left_matches) or is_empty(right_matches) do
     {left_level && right_level, Matchlist.merge(left_matches, right_matches)}
   end
+
   defp merge({left_level, left_matches}, {right_level, right_matches}) do
     join_matchlists(left_level && right_level, left_matches, right_matches)
   end
@@ -336,7 +350,7 @@ defmodule Tria.Language.Interpreter do
         {_key, values}, level ->
           # In case some patterns are matched agains different values
           # We'll just check if it is a values match
-          #FIXME fix function calls in ast
+          # FIXME fix function calls in ast
           values
           |> pairs()
           |> Enum.map(fn {l, r} -> mutual_translate(l, r) end)
@@ -352,21 +366,23 @@ defmodule Tria.Language.Interpreter do
                     acc && level
 
                   false ->
-                    throw :no
+                    throw(:no)
                 end
 
               :no ->
-                throw :no
+                throw(:no)
             end
           end)
       end)
 
     {level, matches}
-    catch :no -> :no
+  catch
+    :no -> :no
   end
 
   defp pairs([]), do: []
   defp pairs([_]), do: []
+
   defp pairs([head | tail]) do
     Enum.reduce(tail, pairs(tail), fn item, pairs ->
       [{head, item} | pairs]
@@ -376,7 +392,7 @@ defmodule Tria.Language.Interpreter do
   defp group_matches(matches) do
     matches
     |> Enum.group_by(fn {k, _} -> k end, fn {_, v} -> v end)
-    |> Enum.map(fn {key, values} -> {key, Enum.uniq values} end)
+    |> Enum.map(fn {key, values} -> {key, Enum.uniq(values)} end)
   end
 
   # Here I use counters, but all of this will be dropped later
@@ -422,12 +438,14 @@ defmodule Tria.Language.Interpreter do
 
   def do_check_guards(_, _, :no), do: :no
   def do_check_guards([], _, acc), do: acc
+
   def do_check_guards([guard | tail], bindmap, acc) do
     do_check_guards(tail, bindmap, acc && check_guard(guard, bindmap))
   end
 
-  defguard is_any(value) when is_dotcall(value) or is_variable(value)
-    or (is_triple(value) and :erlang.element(1, value) in ~w[receive case try cond]a)
+  defguard is_any(value)
+           when is_dotcall(value) or is_variable(value) or
+                  (is_triple(value) and :erlang.element(1, value) in ~w[receive case try cond]a)
 
   def check_guard(dot_call(:erlang, :andalso, [left, right]), bindmap) do
     check_guard(left, bindmap) && check_guard(right, bindmap)
@@ -445,6 +463,7 @@ defmodule Tria.Language.Interpreter do
       _ -> :maybe
     end
   end
+
   def check_guard(dot_call(_, :is_tuple, key), bindmap) do
     case Bindmap.fetch_unfolded(bindmap, key) do
       {:ok, {_, _}} -> :yes
@@ -454,6 +473,7 @@ defmodule Tria.Language.Interpreter do
       _ -> :maybe
     end
   end
+
   def check_guard(dot_call(_, :is_binary, key), bindmap) do
     case Bindmap.fetch_unfolded(bindmap, key) do
       {:ok, {:<<>>, _, _}} -> :yes
@@ -462,6 +482,7 @@ defmodule Tria.Language.Interpreter do
       _ -> :maybe
     end
   end
+
   for literal_check <- ~w[is_atom is_integer is_float is_number]a do
     def check_guard(dot_call(:erlang, unquote(literal_check), key), bindmap) do
       case Bindmap.fetch_unfolded(bindmap, key) do
@@ -479,6 +500,6 @@ defmodule Tria.Language.Interpreter do
       end
     end
   end
-  def check_guard(_, _), do: :maybe
 
+  def check_guard(_, _), do: :maybe
 end

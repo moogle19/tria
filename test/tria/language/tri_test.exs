@@ -29,8 +29,8 @@ defmodule Tria.Language.TriTest do
   end
 
   test "basic expression" do
-    quoted = quote do: function x
-    assert tri(function x) = quoted
+    quoted = quote do: function(x)
+    assert tri(function(x)) = quoted
     assert is_variable(x)
   end
 
@@ -54,31 +54,37 @@ defmodule Tria.Language.TriTest do
     test "just works" do
       x = 1
       y = 2
+
       q =
         tri to_tria: false do
           x + y
         end
+
       assert {:+, _, [1, 2]} = q
     end
 
     test "partly isolates" do
       x = 1
+
       q =
         tri to_tria: false do
           x + y
         end
+
       assert {:+, _, [1, {:y, _, _}]} = q
     end
 
     test "isolates" do
       x = 1
+
       q =
         tri to_tria: false, isolate: true do
           x + y
         end
 
       assert {:+, _, [{:x, _, ctx}, {:y, _, ctx}]} = q
-      assert x == 1 # To disable unused warning
+      # To disable unused warning
+      assert x == 1
     end
   end
 end

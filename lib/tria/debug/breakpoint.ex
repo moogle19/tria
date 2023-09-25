@@ -1,5 +1,4 @@
 defmodule Tria.Debug.Breakpoint do
-
   @moduledoc """
   Black magic of debugging
   """
@@ -11,11 +10,13 @@ defmodule Tria.Debug.Breakpoint do
   end
 
   defmacro handle_breakpoint(point) do
-    vars = vars __CALLER__
+    vars = vars(__CALLER__)
+
     quote do
       stacktrace = try(do: raise("error"), rescue: (_ -> __STACKTRACE__))
       unquote(__MODULE__).do_handle_breakpoint(unquote(point), __ENV__, stacktrace, unquote(vars))
-      nil #AS A NOOP
+      # AS A NOOP
+      nil
     end
   end
 
@@ -30,13 +31,13 @@ defmodule Tria.Debug.Breakpoint do
 
     Breakpoint
       Stacktrace:
-        #{format Exception.format_stacktrace(stacktrace)}
+        #{format(Exception.format_stacktrace(stacktrace))}
       Context:
         #{formatted_vars}
 
     """
 
-    IO.puts message
+    IO.puts(message)
   end
 
   # Helpers
@@ -68,5 +69,4 @@ defmodule Tria.Debug.Breakpoint do
       {ast_to_string(variable, with_contexts: true), variable}
     end)
   end
-
 end

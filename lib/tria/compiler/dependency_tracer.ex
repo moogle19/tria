@@ -13,10 +13,11 @@ defmodule Tria.Compiler.DependencyTracer do
 
   ## Public API
 
-  @spec with_tracer((() -> result)) :: {result, graphs()}
+  @spec with_tracer((-> result)) :: {result, graphs()}
         when result: any()
   def with_tracer(func) do
     start_link()
+
     try do
       {func.(), complete_all()}
     after
@@ -55,9 +56,12 @@ defmodule Tria.Compiler.DependencyTracer do
 
   def init(_opts) do
     state = %{
-      file_dependants: %{}, # file  -> [referenced_module_in_file]
-      links: %{},           # graph -> [{mfarity, mfarity}]
-      file_to_modules: %{}  # file  -> [module_defined_in_file]
+      # file  -> [referenced_module_in_file]
+      file_dependants: %{},
+      # graph -> [{mfarity, mfarity}]
+      links: %{},
+      # file  -> [module_defined_in_file]
+      file_to_modules: %{}
     }
 
     {:ok, state}
@@ -68,18 +72,26 @@ defmodule Tria.Compiler.DependencyTracer do
     {:noreply, %{state | links: links}}
   end
 
-  def handle_cast({:link_to_file, graph, mfarity, file}, %{file_dependants: file_dependants} = state) do
+  def handle_cast(
+        {:link_to_file, graph, mfarity, file},
+        %{file_dependants: file_dependants} = state
+      ) do
     pair = {graph, mfarity}
     file_dependants = Map.update(file_dependants, file, [pair], &[pair | &1])
     {:noreply, %{state | file_dependants: file_dependants}}
   end
 
   def handle_cast({:module_in_file, file, module}, %{file_to_modules: file_to_modules} = state) do
-    file_to_modules = Map.update(file_to_modules, file, [module], & [module | &1])
+    file_to_modules = Map.update(file_to_modules, file, [module], &[module | &1])
     {:noreply, %{state | file_to_modules: file_to_modules}}
   end
 
-  def handle_call({:complete_file, file}, _from, %{file_dependants: file_dependants, links: links, file_to_modules: file_to_modules} = state) do
+  def handle_call(
+        {:complete_file, file},
+        _from,
+        %{file_dependants: file_dependants, links: links, file_to_modules: file_to_modules} =
+          state
+      ) do
     state =
       with(
         {deps, file_dependants} when is_list(deps) <- Map.pop(file_dependants, file),
@@ -90,7 +102,12 @@ defmodule Tria.Compiler.DependencyTracer do
             links -> do_link(links, graph, {module, nil, 0}, dep)
           end
 
-        %{state | file_dependants: file_dependants, file_to_modules: file_to_modules, links: links}
+        %{
+          state
+          | file_dependants: file_dependants,
+            file_to_modules: file_to_modules,
+            links: links
+        }
       else
         _ -> state
       end
@@ -121,7 +138,8 @@ defmodule Tria.Compiler.DependencyTracer do
     link_pair(:depends, {module, nil, 0}, {required, nil, 0})
   end
 
-  def trace({macro, _, module, function, arity}, env) when macro in ~w[remote_macro imported_macro]a do
+  def trace({macro, _, module, function, arity}, env)
+      when macro in ~w[remote_macro imported_macro]a do
     link_to_current(:depends, {module, function, arity}, env)
   end
 
@@ -133,7 +151,8 @@ defmodule Tria.Compiler.DependencyTracer do
     link_to_current(:calls, {module, :__struct__, 1}, env)
   end
 
-  def trace({call, _, module, function, arity}, env) when call in ~w[imported_function remote_function]a do
+  def trace({call, _, module, function, arity}, env)
+      when call in ~w[imported_function remote_function]a do
     link_to_current(:calls, {module, function, arity}, env)
   end
 
@@ -157,6 +176,7 @@ defmodule Tria.Compiler.DependencyTracer do
   defp link_to_current(_graph, mfarity, %Macro.Env{module: module}) do
     link_pair(:depends, {module, nil, 0}, mfarity)
   end
+
   defp link_to_current(_, _, _), do: :ok
 
   defp link_pair(graph, left, right) do

@@ -1,5 +1,4 @@
 defmodule Tria.Language.MFArity do
-
   @moduledoc """
   Helper for working with MFArity structure
   """
@@ -8,7 +7,7 @@ defmodule Tria.Language.MFArity do
 
   @type mfarity :: {module(), atom(), non_neg_integer()}
 
-  @type dotcall :: {{:".", list(), [module() | atom()]}, list(), [Tria.t()]}
+  @type dotcall :: {{:., list(), [module() | atom()]}, list(), [Tria.t()]}
 
   import Tria.Language
   import Kernel, except: [inspect: 1, inspect: 2, to_string: 1]
@@ -20,31 +19,31 @@ defmodule Tria.Language.MFArity do
   ## Guards
 
   defguard is_mfarity(module, function, arity)
-    when is_atom(module) and is_atom(function) and is_integer(arity) and arity >= 0
+           when is_atom(module) and is_atom(function) and is_integer(arity) and arity >= 0
 
   defguard is_mfarity(mfarity)
-    when is_triple(mfarity) and is_mfarity(element(mfarity, 0), element(mfarity, 1), element(mfarity, 2))
+           when is_triple(mfarity) and
+                  is_mfarity(element(mfarity, 0), element(mfarity, 1), element(mfarity, 2))
 
   defguard is_mfargs(module, function, args)
-    when is_atom(module) and is_atom(function) and is_list(args)
+           when is_atom(module) and is_atom(function) and is_list(args)
 
   defguard is_mfargs(mfargs)
-    when is_triple(mfargs) and is_mfargs(element(mfargs, 0), element(mfargs, 1), element(mfargs, 2))
+           when is_triple(mfargs) and
+                  is_mfargs(element(mfargs, 0), element(mfargs, 1), element(mfargs, 2))
 
   @doc """
   Checks if passed AST is a function call with dot (like Module.function)
   """
   defguard is_dotcall(t)
-    when is_triple(t)
-    and is_list(element(t, 1))
-    and is_list(element(t, 2))
-    and (
-          is_triple(element(t, 0))
-          and element(element(t, 0), 0) == :.
-          and is_list(element(element(t, 0), 1))
-          and is_list(element(element(t, 0), 2))
-          and length(element(element(t, 0), 2)) == 2
-        )
+           when is_triple(t) and
+                  is_list(element(t, 1)) and
+                  is_list(element(t, 2)) and
+                  (is_triple(element(t, 0)) and
+                     element(element(t, 0), 0) == :. and
+                     is_list(element(element(t, 0), 1)) and
+                     is_list(element(element(t, 0), 2)) and
+                     length(element(element(t, 0), 2)) == 2)
 
   ## Converters
 
@@ -91,11 +90,11 @@ defmodule Tria.Language.MFArity do
 
   @spec to_ast(mfargs() | dotcall() | mfarity()) :: Tria.t()
   def to_ast({module, function, arity}) when is_mfarity(module, function, arity) do
-    {:"&", [], [{:"/", [], [{{:".", [], [module, function]}, [no_parens: true], []}, arity]}]}
+    {:&, [], [{:/, [], [{{:., [], [module, function]}, [no_parens: true], []}, arity]}]}
   end
 
   def to_ast(other) do
-    to_dotcall other
+    to_dotcall(other)
   end
 
   ### Inspect
@@ -115,5 +114,4 @@ defmodule Tria.Language.MFArity do
     |> ast_to_string(opts)
     |> IO.iodata_to_binary()
   end
-
 end

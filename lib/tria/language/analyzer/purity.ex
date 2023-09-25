@@ -1,5 +1,4 @@
 defmodule Tria.Language.Analyzer.Purity do
-
   @moduledoc """
   Module which analyzes AST for Purity
 
@@ -29,6 +28,7 @@ defmodule Tria.Language.Analyzer.Purity do
   """
   def run_analyze(ast, opts \\ []) do
     stack = Keyword.get(opts, :stack, [])
+
     {type, result} =
       ast
       |> postwalk(fn
@@ -37,6 +37,7 @@ defmodule Tria.Language.Analyzer.Purity do
             mfa
           else
             mfa = Macro.escape(mfa)
+
             quote do
               :erlang.element(2, send(self(), {:effect, unquote(mfa)}))
             end
@@ -76,7 +77,7 @@ defmodule Tria.Language.Analyzer.Purity do
 
       # Receive is always impure, even just sleeping
       {:receive, _, _} ->
-        throw false
+        throw(false)
 
       # Optimization to not waste time on analysis of patterns
       {op, _, [_, right]} = ast when op in ~w[-> = <-]a ->
@@ -84,14 +85,15 @@ defmodule Tria.Language.Analyzer.Purity do
 
       # Called to variables are considered impure
       dot_call(_, _) ->
-        throw false
+        throw(false)
 
       other ->
         other
     end)
 
     true
-    catch false -> false
+  catch
+    false -> false
   end
 
   @spec check_analyze_mfarity(mfa()) :: boolean()
@@ -101,8 +103,9 @@ defmodule Tria.Language.Analyzer.Purity do
   rescue
     e ->
       if Debug.debugging?(:check_analyze_mfarity) do
-        IO.puts "Failed during analysis of #{module}.#{function}/#{arity}"
+        IO.puts("Failed during analysis of #{module}.#{function}/#{arity}")
       end
+
       reraise e, __STACKTRACE__
   end
 
@@ -116,14 +119,17 @@ defmodule Tria.Language.Analyzer.Purity do
   # This functions checks whether the mfargs is pure or not
   @spec lookup(MFArity.mfargs(), stack()) :: boolean()
   defp lookup({_, :__impl__, [:target]}, _), do: true
+
   defp lookup({_, f, _}, [{module, function, arity} = mfarity | stack]) when is_variable(f) do
     with nil <- do_lookup(mfarity, stack) do
       pure? = ask_provider({module, function, List.duplicate(nil, arity)}, stack)
       FunctionRepo.insert(mfarity, :pure, pure?)
     end
   end
+
   defp lookup(mfargs, stack) when is_mfargs(mfargs) do
     {module, function, arity} = mfarity = MFArity.to_mfarity(mfargs)
+
     with nil <- do_lookup(mfarity, stack) do
       case Analyzer.tria_bodies(mfarity) do
         # No function found
@@ -149,6 +155,7 @@ defmodule Tria.Language.Analyzer.Purity do
       end
     end
   end
+
   defp lookup({_m, _f, _a}, _stack), do: false
 
   defp do_lookup({module, function, arity} = mfarity, stack) do
@@ -173,12 +180,12 @@ defmodule Tria.Language.Analyzer.Purity do
   defp fetch_effects() do
     receive do
       {:effect, effect} -> [effect | fetch_effects()]
-      after 0 -> []
+    after
+      0 -> []
     end
   end
 
   defp ask_provider(mfarity, stack) do
     Provider.decide(:pure, mfarity, stack: stack, show: true)
   end
-
 end

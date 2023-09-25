@@ -1,5 +1,4 @@
 defmodule Tria.Optimizer.Pass.Inlining do
-
   @moduledoc """
   Pass for functions inlining
   """
@@ -36,13 +35,15 @@ defmodule Tria.Optimizer.Pass.Inlining do
   def inline(module, function, args, _state) do
     arity = length(args)
     mfa = {module, function, arity}
+
     case FunctionRepo.lookup(mfa, :tria) do
       nil ->
         :no
 
       # Simple case for functions with defaults
-      {:fn, _, [{:"->", _, [function_args, dot_call(^module, ^function, more_args)]}]} = the_fn ->
+      {:fn, _, [{:->, _, [function_args, dot_call(^module, ^function, more_args)]}]} = the_fn ->
         diff = more_args -- function_args
+
         if Enum.all?(diff, &vared_literal?/1) do
           inlined =
             tri to_ssa: true do
@@ -59,5 +60,4 @@ defmodule Tria.Optimizer.Pass.Inlining do
         :no
     end
   end
-
 end

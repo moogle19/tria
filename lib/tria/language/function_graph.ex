@@ -1,5 +1,4 @@
 defmodule Tria.Language.FunctionGraph do
-
   @moduledoc """
   Helper module for manipulating graphs of functions.
   These graphs are directed and weightless.
@@ -114,10 +113,8 @@ defmodule Tria.Language.FunctionGraph do
     ms = [
       {{{:"$1", {:"$2", :_, :_}}, {:"$3", :_, :_}},
        [
-         {:orelse,
-           { :andalso, {:==, :"$1", :forward},  {:==, :"$2", {:const, module}} },
-           { :andalso, {:==, :"$1", :backward}, {:==, :"$3", {:const, module}} }
-         }
+         {:orelse, {:andalso, {:==, :"$1", :forward}, {:==, :"$2", {:const, module}}},
+          {:andalso, {:==, :"$1", :backward}, {:==, :"$3", {:const, module}}}}
        ], [true]}
     ]
 
@@ -126,14 +123,13 @@ defmodule Tria.Language.FunctionGraph do
     |> :ets.select_delete(ms)
     |> Kernel.>(0)
   end
+
   def unlink_rights(graph, left) do
     ms = [
       {{{:"$1", :"$2"}, :"$3"},
        [
-         {:orelse,
-           { :andalso, {:==, :"$1", :forward},  {:==, :"$2", {:const, left}} },
-           { :andalso, {:==, :"$1", :backward}, {:==, :"$3", {:const, left}} }
-         }
+         {:orelse, {:andalso, {:==, :"$1", :forward}, {:==, :"$2", {:const, left}}},
+          {:andalso, {:==, :"$1", :backward}, {:==, :"$3", {:const, left}}}}
        ], [true]}
     ]
 
@@ -203,6 +199,7 @@ defmodule Tria.Language.FunctionGraph do
   @spec link_many(t(), links(), Keyword.t()) :: :ok
   def link_many(graph, links, opts \\ []) do
     links = Enum.map(links, fn {left, right} -> {{:forward, left}, right} end)
+
     links =
       if opts[:backtrack] do
         links ++ Enum.map(links, fn {{_, left}, right} -> {{:backward, right}, left} end)
@@ -258,21 +255,24 @@ defmodule Tria.Language.FunctionGraph do
   defp do_reachable(_, vertex, accmap) when :erlang.map_get(vertex, accmap) do
     accmap
   end
+
   defp do_reachable(graph, vertex, accmap) do
     links = do_links(graph, vertex)
+
     Enum.reduce(links, accmap, fn linked_vertex, accmap ->
       do_reachable(graph, linked_vertex, Map.put(accmap, linked_vertex, []))
     end)
   end
 
   defp do_links(graph, vertex) do
-    ms = [{ {{:forward, {:const, vertex}}, :"$1"}, [], [{:"$1"}] }]
+    ms = [{{{:forward, {:const, vertex}}, :"$1"}, [], [{:"$1"}]}]
     :ets.select(graph, ms)
   end
 
   defp do_link(graph, left, right, []) do
     :ets.insert(graph, {{:forward, left}, right})
   end
+
   defp do_link(graph, left, right, opts) do
     if Keyword.get(opts, :backtrack, true) do
       :ets.insert(graph, [{{:forward, left}, right}, {{:backward, right}, left}])

@@ -1,5 +1,4 @@
 defmodule Tria.Debug do
-
   @moduledoc """
   Module with helpers for debugging
   and managing debugging global state
@@ -19,6 +18,7 @@ defmodule Tria.Debug do
   def debugging?(nil) do
     :all == :persistent_term.get(:tria_debugging, [])
   end
+
   def debugging?(tag) do
     case :persistent_term.get(:tria_debugging, []) do
       :all -> true
@@ -37,7 +37,7 @@ defmodule Tria.Debug do
   end
 
   @spec inspect(value, Keyword.t()) :: value
-                when value: any()
+        when value: any()
   def inspect(value, opts \\ []) do
     if debugging?(opts[:label]) do
       IO.inspect(value, opts)
@@ -51,5 +51,4 @@ defmodule Tria.Debug do
     if debugging?(nil), do: IO.puts(string)
     :ok
   end
-
 end

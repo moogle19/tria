@@ -41,9 +41,11 @@ defmodule Mix.Tasks.Tria.Clean do
     confirmed? =
       with false <- args in [["-y"], ["--yes"]] do
         result = IO.gets("Confirm? [Y(yes); n(no)] ") in ["y\n", "Y\n", "\n"]
+
         unless result do
-          IO.write [IO.ANSI.red(), "Denied. Nothing cleaned\n", IO.ANSI.reset()]
+          IO.write([IO.ANSI.red(), "Denied. Nothing cleaned\n", IO.ANSI.reset()])
         end
+
         result
       end
 
@@ -53,15 +55,14 @@ defmodule Mix.Tasks.Tria.Clean do
   end
 
   defp info(cache) do
-    IO.write [
+    IO.write([
       "Deleting file: ",
       IO.ANSI.green(),
       cache,
       IO.ANSI.reset(),
       "\n"
-    ]
+    ])
 
     cache
   end
-
 end

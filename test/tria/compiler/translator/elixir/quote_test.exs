@@ -15,7 +15,7 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        {:__aliases__, [], [{:__MODULE__, [if_undefined: :apply], tri __MODULE__}, :X]}
+        {:__aliases__, [], [{:__MODULE__, [if_undefined: :apply], tri(__MODULE__)}, :X]}
       end
     end
   end
@@ -37,7 +37,7 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       translated =
         tri do
           quote do
-            unquote_splicing [1, 2, 3, 4]
+            unquote_splicing([1, 2, 3, 4])
             5
           end
         end
@@ -116,6 +116,7 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
 
     test "fixed line true" do
       line = __ENV__.line + 5
+
       translated =
         tri do
           quote([line: true], do: bar(1, 2, 3))
@@ -130,7 +131,7 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       assert got_line == line
     end
 
-    #TODO
+    # TODO
     # test "dynamic line" do
     #   assert quote(line: String.to_integer("123"), do: Foo.unquote(:bar)()) ==
     #   {{:., [line: 123], [{:__aliases__, [line: 123, alias: false], [:Foo]}, :bar]},
@@ -147,6 +148,7 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
 
       assert_tri translated do
         tri(name, _, ctx) = :dynamic
+
         (
           :elixir_quote.validate_runtime(:context, tri(name, _, ctx))
           {:bar, _, tri(name, _, ctx)}
@@ -198,7 +200,7 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
         {{:., [], [Access, :get]}, [],
-         [{:foo, [], [{:bar, [if_undefined: :apply], tri __MODULE__}]}, :baz]}
+         [{:foo, [], [{:bar, [if_undefined: :apply], tri(__MODULE__)}]}, :baz]}
       end
     end
 
@@ -215,9 +217,9 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
     test "do" do
       tri do
         quote do
-           unquote(:bar)(1) do
-             2 + 3
-           end
+          unquote(:bar)(1) do
+            2 + 3
+          end
         end
       end
       |> ElixirTranslator.to_tria!(__ENV__)
@@ -232,7 +234,13 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        :elixir_quote.dot([], {:foo, [if_undefined: :apply], tri(__MODULE__)}, :bar, nil, tri(__MODULE__))
+        :elixir_quote.dot(
+          [],
+          {:foo, [if_undefined: :apply], tri(__MODULE__)},
+          :bar,
+          nil,
+          tri(__MODULE__)
+        )
       end
     end
 
@@ -242,7 +250,13 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        :elixir_quote.dot([], {:foo, [if_undefined: :apply], tri(__MODULE__)}, :bar, [], tri(__MODULE__))
+        :elixir_quote.dot(
+          [],
+          {:foo, [if_undefined: :apply], tri(__MODULE__)},
+          :bar,
+          [],
+          tri(__MODULE__)
+        )
       end
     end
 
@@ -252,7 +266,13 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        :elixir_quote.dot([], {:foo, [if_undefined: :apply], tri(__MODULE__)}, :bar, [1], tri(__MODULE__))
+        :elixir_quote.dot(
+          [],
+          {:foo, [if_undefined: :apply], tri(__MODULE__)},
+          :bar,
+          [1],
+          tri(__MODULE__)
+        )
       end
     end
 
@@ -266,8 +286,13 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        :elixir_quote.dot([], {:foo, [if_undefined: :apply], tri(__MODULE__)}, :bar,
-          [1, [do: {:+, [context: tri(__MODULE__), import: Kernel], [2, 3]}]], tri(__MODULE__))
+        :elixir_quote.dot(
+          [],
+          {:foo, [if_undefined: :apply], tri(__MODULE__)},
+          :bar,
+          [1, [do: {:+, [context: tri(__MODULE__), import: Kernel], [2, 3]}]],
+          tri(__MODULE__)
+        )
       end
     end
 
@@ -277,7 +302,13 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        :elixir_quote.dot([], {:foo, [if_undefined: :apply], tri(__MODULE__)}, {:bar, [], nil}, nil, tri(__MODULE__))
+        :elixir_quote.dot(
+          [],
+          {:foo, [if_undefined: :apply], tri(__MODULE__)},
+          {:bar, [], nil},
+          nil,
+          tri(__MODULE__)
+        )
       end
     end
 
@@ -287,7 +318,13 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        :elixir_quote.dot([], {:foo, [if_undefined: :apply], tri(__MODULE__)}, {:bar, [], nil}, [], tri(__MODULE__))
+        :elixir_quote.dot(
+          [],
+          {:foo, [if_undefined: :apply], tri(__MODULE__)},
+          {:bar, [], nil},
+          [],
+          tri(__MODULE__)
+        )
       end
     end
 
@@ -297,7 +334,13 @@ defmodule Tria.Compiler.ElixirTranslator.QuotedTest do
       end
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
-        :elixir_quote.dot([], {:foo, [if_undefined: :apply], tri(__MODULE__)}, {:bar, [], nil}, [1, 2], tri(__MODULE__))
+        :elixir_quote.dot(
+          [],
+          {:foo, [if_undefined: :apply], tri(__MODULE__)},
+          {:bar, [], nil},
+          [1, 2],
+          tri(__MODULE__)
+        )
       end
     end
 

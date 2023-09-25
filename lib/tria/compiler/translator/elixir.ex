@@ -1,5 +1,4 @@
 defmodule Tria.Compiler.ElixirTranslator do
-
   @moduledoc """
   # Elixir to Tria translator.
 
@@ -75,9 +74,9 @@ defmodule Tria.Compiler.ElixirTranslator do
         {name, [{:counter, counter} | meta], nil}
 
       # Translate fn to &capture/arity
-      {:fn, _, [{:"->", _, [args1, dot_call(module, function, args2)]}]}  = the_fn ->
+      {:fn, _, [{:->, _, [args1, dot_call(module, function, args2)]}]} = the_fn ->
         if unmeta(args1) == unmeta(args2) do
-          quote do: &unquote(module).unquote(function)/unquote(length args1)
+          quote do: &(unquote(module).unquote(function) / unquote(length(args1)))
         else
           the_fn
         end
@@ -87,7 +86,7 @@ defmodule Tria.Compiler.ElixirTranslator do
         {:try, meta, [clauses]}
 
       {:receive, meta, [[do: body, after: {timeout, after_body}]]} ->
-        {:receive, meta, [[do: body, after: [{:"->", [], [[timeout], after_body]}]]]}
+        {:receive, meta, [[do: body, after: [{:->, [], [[timeout], after_body]}]]]}
 
       other ->
         other
@@ -101,6 +100,7 @@ defmodule Tria.Compiler.ElixirTranslator do
   def unalias({:__aliases__, meta, names} = ast) when is_aliases(ast) do
     if the_alias = meta[:alias], do: the_alias, else: Module.concat(names)
   end
+
   def unalias(other), do: other
 
   # Private
@@ -108,91 +108,97 @@ defmodule Tria.Compiler.ElixirTranslator do
   # Expansion and walking the tree
   defp expand_all(breakpoint(point), env) do
     handle_breakpoint(point)
-    { nil, env }
+    {nil, env}
   end
 
   # Explicitly do this before expansion
   defp expand_all({:__aliases__, _, _} = aliased, env) do
-    { unalias(aliased, env), env }
+    {unalias(aliased, env), env}
   end
 
   # __ENV__ is ****ing special because it has non-ast forms inside
   defp expand_all({:__ENV__, _, _}, env) do
-    { Macro.escape(env), env }
+    {Macro.escape(env), env}
   end
 
   # Defmodule and other defs
   defp expand_all({:defmodule, meta, [name, [do: body]]}, env) do
     inner_env = add_module(env, name)
-    { body, _ } = expand_all(body, inner_env)
-    { {:defmodule, meta, [name, [do: body]]}, env }
+    {body, _} = expand_all(body, inner_env)
+    {{:defmodule, meta, [name, [do: body]]}, env}
   end
 
-  defp expand_all({kind, meta, [{name, smeta, args}, body]}, env) when kind in ~w[def defp defmacro defmacrop]a do
-    { args, _} = expand_all(args, env)
+  defp expand_all({kind, meta, [{name, smeta, args}, body]}, env)
+       when kind in ~w[def defp defmacro defmacrop]a do
+    {args, _} = expand_all(args, env)
     inner_env = add_function(env, name, args)
-    { body, _ } = expand_all(body, inner_env)
-    { {kind, meta, [{name, smeta, args}, body]}, env }
+    {body, _} = expand_all(body, inner_env)
+    {{kind, meta, [{name, smeta, args}, body]}, env}
   end
 
   defp expand_all(ast, env) do
     case Macro.expand(ast, env) do
       # Imports, aliases, requires and other stuff which changes env
       {:__aliases__, _, _} = aliased ->
-        { unalias(aliased, env), env }
+        {unalias(aliased, env), env}
 
       tri(require something, as: an_alias) ->
         module = unalias(something, env)
+
         env =
           env
           |> add_require(module)
           |> add_alias(module, an_alias)
-        { module, env }
 
-      tri require something ->
+        {module, env}
+
+      tri(require something) ->
         module = unalias(something, env)
-        { module, add_require(env, module) }
+        {module, add_require(env, module)}
 
       tri(alias something, as: an_alias) ->
         module = unalias(something, env)
-        { module, add_alias(env, module, an_alias) }
+        {module, add_alias(env, module, an_alias)}
 
-      tri alias something ->
+      tri(alias something) ->
         case something do
-          {{:".", _, [base, :"{}"]}, _, tails} ->
+          {{:., _, [base, :{}]}, _, tails} ->
             base = unalias(base, env)
             modules = Enum.map(tails, &Module.concat(base, unalias(&1, env)))
+
             env =
               Enum.reduce(modules, env, fn module, env ->
-                alias_to = List.last Module.split module
+                alias_to = List.last(Module.split(module))
                 add_alias(env, module, alias_to)
               end)
-            { modules, env }
+
+            {modules, env}
 
           module ->
             module = unalias(module, env)
-            alias_to = List.last Module.split module
-            { module, add_alias(env, module, alias_to) }
+            alias_to = List.last(Module.split(module))
+            {module, add_alias(env, module, alias_to)}
         end
 
-      tri import something ->
+      tri(import something) ->
         module = unalias(something, env)
-        { module, add_import(env, module) }
+        {module, add_import(env, module)}
 
       tri(import something, opts) ->
         module = unalias(something, env)
-        { module, add_import(env, module, opts) }
+        {module, add_import(env, module, opts)}
 
       # Quoted
       # FIXME TODO handle opts
       {:quote, _meta, opts_body} when is_list(opts_body) ->
         expand_quote(opts_body, env)
-        # |> tap(fn {body, _} -> IO.inspect(body, label: :expanded) end)
+
+      # |> tap(fn {body, _} -> IO.inspect(body, label: :expanded) end)
 
       # Variable
       variable when is_elixir_variable(variable) ->
         variable = elixir_to_tria_variable(variable)
-        { variable, add_variable(env, variable) }
+        {variable, add_variable(env, variable)}
 
       # List
       list when is_list(list) ->
@@ -202,15 +208,15 @@ defmodule Tria.Compiler.ElixirTranslator do
       {l, r} ->
         {l, env} = expand_all(l, env)
         {r, env} = expand_all(r, env)
-        { {l, r}, env }
+        {{l, r}, env}
 
       # Map Tuple
       {map_or_tuple, meta, items} when map_or_tuple in ~w[{} %{}]a ->
         {items, env} = expand_all(items, env)
-        { {map_or_tuple, meta, items}, env }
+        {{map_or_tuple, meta, items}, env}
 
       # Binary
-      {:"<<>>", meta, items} ->
+      {:<<>>, meta, items} ->
         # Binary syntax can have variables and macros inside
         # And operators (like `-`) are treated differently
         {items, env} =
@@ -218,6 +224,7 @@ defmodule Tria.Compiler.ElixirTranslator do
             {:"::", meta, [left, right]}, env ->
               meta = ease(meta, env)
               {left, env} = expand_all(left, env)
+
               {right, env} =
                 Macro.postwalk(right, env, fn
                   variable, env when is_elixir_variable(variable) ->
@@ -227,17 +234,17 @@ defmodule Tria.Compiler.ElixirTranslator do
                   other, env ->
                     {Macro.expand(other, env), env}
                 end)
-              { {:"::", meta, [left, right]}, env }
+
+              {{:"::", meta, [left, right]}, env}
 
             other, env ->
               expand_all(other, env)
           end)
 
-        { {:"<<>>", meta, items}, env }
-
+        {{:<<>>, meta, items}, env}
 
       # Structures
-      tri %name{tri_splicing items} ->
+      tri(%name{tri_splicing(items)}) ->
         {items, env} = expand_all(items, env)
         {name, _} = expand_all(name, env)
 
@@ -246,7 +253,7 @@ defmodule Tria.Compiler.ElixirTranslator do
         # else
         #   { quote(do: %unquote(name){unquote_splicing items}), env }
         # end
-        { quote(do: %unquote(name){unquote_splicing items}), env }
+        {quote(do: %unquote(name){unquote_splicing(items)}), env}
 
       # Closures
       {:&, meta, [{:/, slashmeta, [call, arity]}]} when is_integer(arity) ->
@@ -255,15 +262,15 @@ defmodule Tria.Compiler.ElixirTranslator do
             {name, meta, context} when is_variable(name, meta, context) ->
               case lookup_call(name, arity, env) do
                 {_, module} ->
-                  { {:".", ease(meta, env), [module, name]}, env }
+                  {{:., ease(meta, env), [module, name]}, env}
 
                 _ ->
-                  { name, env }
+                  {name, env}
               end
 
             dot_call(module, func, []) ->
               module = unalias(module, env)
-              expand_all({:".", [], [module, func]}, env)
+              expand_all({:., [], [module, func]}, env)
           end
 
         args =
@@ -274,15 +281,15 @@ defmodule Tria.Compiler.ElixirTranslator do
 
         body = {call, ease(slashmeta, env), args}
 
-        expand_all({:fn, meta, [{:"->", meta, [args, body]}]}, env)
+        expand_all({:fn, meta, [{:->, meta, [args, body]}]}, env)
 
-      {:"&", meta, [body]} ->
+      {:&, meta, [body]} ->
+        # Why only one prewalk?
+        # Because nested captures are not allowed
+        # And one prewalk can translate the whole structure
         {body, vars} =
-          # Why only one prewalk?
-          # Because nested captures are not allowed
-          # And one prewalk can translate the whole structure
           prewalk(body, %{}, fn
-            {:"&", _meta, [int]}, acc when is_integer(int) ->
+            {:&, _meta, [int]}, acc when is_integer(int) ->
               case acc do
                 %{^int => variable} ->
                   {variable, acc}
@@ -302,7 +309,7 @@ defmodule Tria.Compiler.ElixirTranslator do
           |> Enum.sort()
           |> Enum.map(fn {_, v} -> v end)
 
-        expand_all({:fn, meta, [{:"->", meta, [vars, body]}]}, env)
+        expand_all({:fn, meta, [{:->, meta, [vars, body]}]}, env)
 
       # Fn
       {:fn, meta, clauses} when is_list(clauses) ->
@@ -314,11 +321,12 @@ defmodule Tria.Compiler.ElixirTranslator do
       {:cond, meta, [[do: clauses]]} ->
         # cond clauses behave differently from case or fn clauses
         clauses =
-          Enum.map(clauses, fn {:"->", meta, [[left], right]} ->
+          Enum.map(clauses, fn {:->, meta, [[left], right]} ->
             {left, _} = expand_all(left, env)
             {right, _} = expand_all(right, env)
-            {:"->", meta, [[left], right]}
+            {:->, meta, [[left], right]}
           end)
+
         {{:cond, meta, [[do: clauses]]}, env}
 
       # Try
@@ -338,7 +346,7 @@ defmodule Tria.Compiler.ElixirTranslator do
               {:else, clauses}
           end)
 
-        { {:try, meta, [parts]}, env }
+        {{:try, meta, [parts]}, env}
 
       # Case
       {:case, meta, [arg, [do: clauses]]} ->
@@ -368,12 +376,12 @@ defmodule Tria.Compiler.ElixirTranslator do
       {:when, meta, [left, right]} ->
         # left_context = env.context && :guard || :match
         # {left, _env} = expand_all(left, %Macro.Env{env | context: left_context})
-        {left, _env}  = expand_all(left,  env)
+        {left, _env} = expand_all(left, env)
         {right, _env} = expand_all(right, env)
         {{:when, meta, [left, right]}, env}
 
       # Receive
-      {:receive, meta, [[do: body, after: [{:"->", _, [[timeout], after_body]}]]]} ->
+      {:receive, meta, [[do: body, after: [{:->, _, [[timeout], after_body]}]]]} ->
         {body, _env} = expand_all(body, env)
         {timeout, env} = expand_all(timeout, env)
         {after_body, env} = expand_all(after_body, env)
@@ -396,9 +404,10 @@ defmodule Tria.Compiler.ElixirTranslator do
         {right, env} = expand_all(right, env)
         {{:=, meta, [left, right]}, env}
 
-      {{:".", dotmeta, [left, right]}, meta, []} when is_atom(right) ->
+      {{:., dotmeta, [left, right]}, meta, []} when is_atom(right) ->
         {left, env} = expand_all(left, env)
         {right, env} = expand_all(right, env)
+
         quoted =
           if meta[:no_parens] do
             raise "Not implemented"
@@ -406,7 +415,7 @@ defmodule Tria.Compiler.ElixirTranslator do
             {{".", ease(dotmeta, env), [left, right]}, meta, []}
           end
 
-        { quoted, env }
+        {quoted, env}
 
       {name, meta, args} = ast when is_call(ast) ->
         case lookup_call(name, length(args), env) do
@@ -439,8 +448,9 @@ defmodule Tria.Compiler.ElixirTranslator do
             case env do
               # We're not in match or guard
               %Macro.Env{context: nil} ->
-                #Local function maybe?
+                # Local function maybe?
                 {args, env} = expand_all(args, env)
+
                 if defines?(env.module, name, length(args)) do
                   {dot_call(env.module, name, args), env}
                 else
@@ -465,9 +475,8 @@ defmodule Tria.Compiler.ElixirTranslator do
           true ->
             {literal, env}
 
-
           false ->
-            Debug.inspect literal, pretty: true, label: :not_implemented
+            Debug.inspect(literal, pretty: true, label: :not_implemented)
             raise "Not implemented"
         end
     end
@@ -489,7 +498,7 @@ defmodule Tria.Compiler.ElixirTranslator do
 
   defp expand_quote(opts_body, env) do
     {body, opts} = split_quote_opts(opts_body)
-    opts = Map.new opts
+    opts = Map.new(opts)
 
     ex_opts =
       opts
@@ -497,10 +506,12 @@ defmodule Tria.Compiler.ElixirTranslator do
       |> Map.put_new(:context, env.context || env.module)
 
     {body, env} = expand_quote(body, env, ex_opts)
+
     body =
       body
       |> prepend_bind_quoted(ex_opts)
-      |> prepend_validations(opts) # We prepend validations only for original opts
+      # We prepend validations only for original opts
+      |> prepend_validations(opts)
 
     {body, env}
   end
@@ -526,8 +537,10 @@ defmodule Tria.Compiler.ElixirTranslator do
       for {name, code} <- binds do
         {:{}, [], [:=, [], [{:{}, [], [name, [], context]}, code]]}
       end
+
     {:{}, [], [:__block__, [], escaped_binds ++ [body]]}
   end
+
   defp prepend_bind_quoted(body, _), do: body
 
   # Actual tree expansion happens here
@@ -536,7 +549,7 @@ defmodule Tria.Compiler.ElixirTranslator do
   defp expand_quote([{:unquote_splicing, _, [unquoted]} | tail], env, %{unquote: true} = opts) do
     {unquoted, env} = expand_all(unquoted, env)
     {tail, env} = expand_quote(tail, env, opts)
-    { dot_call(:elixir_quote, :list, [unquoted, tail]), env }
+    {dot_call(:elixir_quote, :list, [unquoted, tail]), env}
   end
 
   # Unquote
@@ -546,28 +559,28 @@ defmodule Tria.Compiler.ElixirTranslator do
 
   # unquote in dotcall with args
   defp expand_quote(
-    {{{:., _, [left, :unquote]}, _, [right]}, meta, args},
-    env,
-    %{unquote: true, context: context} = opts
-  ) do
+         {{{:., _, [left, :unquote]}, _, [right]}, meta, args},
+         env,
+         %{unquote: true, context: context} = opts
+       ) do
     {left, env} = expand_quote(left, env, opts)
     {right, env} = expand_all(right, env)
     {args, env} = expand_quote(args, env, opts)
 
-    { dot_call(:elixir_quote, :dot, [meta, left, right, args, context]), env }
+    {dot_call(:elixir_quote, :dot, [meta, left, right, args, context]), env}
   end
 
   # unquote in dotcall without args or parens
   defp expand_quote(
-    {{:., _, [left, :unquote]}, meta, [right]},
-    env,
-    %{unquote: true, context: context} = opts
-  ) do
+         {{:., _, [left, :unquote]}, meta, [right]},
+         env,
+         %{unquote: true, context: context} = opts
+       ) do
     meta = expand_quote_meta(meta, env, opts)
 
     {left, env} = expand_quote(left, env, opts)
     {right, env} = expand_all(right, env)
-    { dot_call(:elixir_quote, :dot, [meta, left, right, nil, context]), env }
+    {dot_call(:elixir_quote, :dot, [meta, left, right, nil, context]), env}
   end
 
   # unquote(something)() call
@@ -576,13 +589,13 @@ defmodule Tria.Compiler.ElixirTranslator do
     {something, env} = expand_all(something, env)
     {args, env} = expand_quote(args, env, opts)
 
-    { {:{}, [], [something, meta, args]}, env }
+    {{:{}, [], [something, meta, args]}, env}
   end
 
   # quote in quote
   defp expand_quote({:quote, _, opts_body}, env, opts) do
     {opts_body, env} = expand_quote(opts_body, env, %{opts | unquote: false})
-    { {:{}, [], [:quote, [], opts_body]}, env }
+    {{:{}, [], [:quote, [], opts_body]}, env}
   end
 
   # Modules Aliases are isolated
@@ -595,40 +608,42 @@ defmodule Tria.Compiler.ElixirTranslator do
   defp expand_quote({left, right}, env, opts) do
     {left, env} = expand_quote(left, env, opts)
     {right, env} = expand_quote(right, env, opts)
-    { {left, right}, env }
+    {{left, right}, env}
   end
 
   # List
   defp expand_quote([head | tail], env, opts) do
     {head, env} = expand_quote(head, env, opts)
     {tail, env} = expand_quote(tail, env, opts)
-    { [head | tail], env }
+    {[head | tail], env}
   end
 
   # Variable
   defp expand_quote({name, meta, ctx}, env, %{context: new_ctx} = opts) when is_atom(ctx) do
     meta = expand_quote_meta([{:if_undefined, :apply} | meta], env, opts)
-    { {:{}, [], [name, meta, new_ctx]}, env }
+    {{:{}, [], [name, meta, new_ctx]}, env}
   end
 
   # Call
-  defp expand_quote({operation, meta, args}, env, opts) when is_atom(operation) and is_list(args) do
+  defp expand_quote({operation, meta, args}, env, opts)
+       when is_atom(operation) and is_list(args) do
     meta = expand_quote_meta(meta, env, opts)
 
     {args, env} = expand_quote(args, env, opts)
+
     meta =
       with(
         true <- is_list(args) and not List.improper?(args),
         {_, module} <- lookup_call(operation, length(args), env)
       ) do
-        opts.context
-        && [{:context, opts.context}, {:import, module} | meta]
-        || [{:import, module} | meta]
+        (opts.context &&
+           [{:context, opts.context}, {:import, module} | meta]) ||
+          [{:import, module} | meta]
       else
         _ -> meta
       end
 
-    { {:{}, [], [operation, meta, args]}, env }
+    {{:{}, [], [operation, meta, args]}, env}
   end
 
   # Triple
@@ -636,7 +651,7 @@ defmodule Tria.Compiler.ElixirTranslator do
     {operation, env} = expand_quote(operation, env, opts)
     {args, env} = expand_quote(args, env, opts)
 
-    { {:{}, [], [operation, expand_quote_meta(meta, env, opts), args]}, env }
+    {{:{}, [], [operation, expand_quote_meta(meta, env, opts), args]}, env}
   end
 
   # List
@@ -668,19 +683,20 @@ defmodule Tria.Compiler.ElixirTranslator do
   defp add_meta_generated(meta, %{generated: generated}) do
     [{:generated, generated} | meta]
   end
+
   defp add_meta_generated(meta, _), do: meta
 
   ## With clauses
 
   defp expand_with_clauses(clauses, env) do
     Enum.map_reduce(clauses, env, fn
-      {:"<-", meta, [left, right]}, env ->
+      {:<-, meta, [left, right]}, env ->
         [left] = expand_clause_args([left], env)
         {right, env} = expand_all(right, env)
-        {{:"<-", meta, [left, right]}, env}
+        {{:<-, meta, [left, right]}, env}
 
       other, env ->
-        #FIXME not sure about this, needs testing
+        # FIXME not sure about this, needs testing
         # I mean, I am not sure that env inheritance works this way
         # inside `with`.
         expand_all(other, env)
@@ -690,34 +706,35 @@ defmodule Tria.Compiler.ElixirTranslator do
   # Case, fn and cond clauses have their own contexts
   defp expand_rescue_clauses(clauses, env) do
     Enum.map_reduce(clauses, env, fn
-      {:"->", meta, [[{:in, inmeta, [arg, exception]}], body]}, env ->
+      {:->, meta, [[{:in, inmeta, [arg, exception]}], body]}, env ->
         [arg] = expand_clause_args([arg], env)
         {body, _internal_env} = expand_all(body, env)
-        {{:"->", meta, [[{:in, inmeta, [arg, exception]}], body]}, env}
+        {{:->, meta, [[{:in, inmeta, [arg, exception]}], body]}, env}
 
-      {:"->", meta, [args, body]}, env ->
+      {:->, meta, [args, body]}, env ->
         args = expand_clause_args(args, env)
         {body, _internal_env} = expand_all(body, env)
-        {{:"->", meta, [args, body]}, env}
+        {{:->, meta, [args, body]}, env}
     end)
   end
 
   # Case, fn and cond clauses have their own contexts
   defp expand_clauses(clauses, env) do
     Enum.map_reduce(clauses, env, fn
-      {:"->", meta, [args, body]}, env ->
+      {:->, meta, [args, body]}, env ->
         args = expand_clause_args(args, env)
         {body, _internal_env} = expand_all(body, env)
-        {{:"->", meta, [args, body]}, env}
+        {{:->, meta, [args, body]}, env}
     end)
   end
 
   defp expand_clause_args([{:when, meta, args_and_guards}], env) do
     {guards, args} = List.pop_at(args_and_guards, -1)
-    {args,   _internal_env} = expand_all(args,   %Macro.Env{env | context: :match})
+    {args, _internal_env} = expand_all(args, %Macro.Env{env | context: :match})
     {guards, _internal_env} = expand_all(guards, %Macro.Env{env | context: :guard})
     [{:when, meta, args ++ [guards]}]
   end
+
   defp expand_clause_args(args, env) do
     {args, _env} = expand_all(args, %Macro.Env{env | context: :match})
     args
@@ -725,8 +742,8 @@ defmodule Tria.Compiler.ElixirTranslator do
 
   defp lookup_call(name, arity, env) do
     case special_form?(name, arity) do
-      true  -> :special_form
-      false -> List.first Macro.Env.lookup_import(env, {name, arity})
+      true -> :special_form
+      false -> List.first(Macro.Env.lookup_import(env, {name, arity}))
     end
   end
 
@@ -750,13 +767,17 @@ defmodule Tria.Compiler.ElixirTranslator do
   end
 
   defp add_alias(%Macro.Env{aliases: aliases} = env, module, alias_to) do
-    alias_to = normalize_alias_to alias_to
+    alias_to = normalize_alias_to(alias_to)
     %Macro.Env{env | aliases: [{alias_to, module} | aliases]}
   end
 
-  defp add_import(%Macro.Env{functions: env_functions, macros: env_macros} = env, module, opts \\ []) do
+  defp add_import(
+         %Macro.Env{functions: env_functions, macros: env_macros} = env,
+         module,
+         opts \\ []
+       ) do
     functions = fn -> module.__info__(:functions) end
-    macros    = fn -> module.__info__(:macros) end
+    macros = fn -> module.__info__(:macros) end
 
     {fonly, monly} =
       case Keyword.fetch(opts, :only) do
@@ -774,7 +795,11 @@ defmodule Tria.Compiler.ElixirTranslator do
     mimported = Enum.sort(monly -- mexcept)
     fimported = Enum.sort(fonly -- fexcept)
 
-    %Macro.Env{env | functions: Keyword.put(env_functions, module, fimported), macros: Keyword.put(env_macros, module, mimported)}
+    %Macro.Env{
+      env
+      | functions: Keyword.put(env_functions, module, fimported),
+        macros: Keyword.put(env_macros, module, mimported)
+    }
   end
 
   defp add_variable(%Macro.Env{versioned_vars: versioned_vars} = env, {name, meta, context}) do
@@ -795,9 +820,11 @@ defmodule Tria.Compiler.ElixirTranslator do
 
   # Here I don't write Macro.Env because sometime I use field-polymorphic structure
   defp unalias(module, _env) when is_atom(module), do: module
+
   defp unalias({:__aliases__, _, [{:__MODULE__, _, _} | tail]}, %{module: module} = env) do
     unalias({:__aliases__, [], [module | tail]}, env)
   end
+
   defp unalias({:__aliases__, _, [module | tail]} = aliased, %{aliases: aliases} = env) do
     case Keyword.fetch(aliases, Module.concat([module])) do
       {:ok, found} ->
@@ -813,18 +840,18 @@ defmodule Tria.Compiler.ElixirTranslator do
         end
     end
   end
+
   defp unalias(other, _env), do: other
 
   defp normalize_alias_to({:__aliases__, _, modules}), do: Module.concat(modules)
   defp normalize_alias_to(module), do: Module.concat([module])
 
-  defp special_form?(:".", _), do: true
+  defp special_form?(:., _), do: true
   defp special_form?(op, arity) when is_integer(arity), do: Macro.special_form?(op, arity)
   # defp special_form?(op, args) when is_list(args), do: Macro.special_form?(op, length(args))
 
   # Checks if this function is defined anywhere
   defp defines?(module, function, arity) do
-
     if Code.ensure_loaded?(module) do
       function_exported?(module, function, arity)
     else
@@ -839,6 +866,7 @@ defmodule Tria.Compiler.ElixirTranslator do
   # When
   defp ease(meta, %Macro.Env{file: file}) do
     file = Path.relative_to_cwd(file)
+
     case meta[:keep] do
       {file, line} ->
         meta
@@ -882,35 +910,35 @@ defmodule Tria.Compiler.ElixirTranslator do
   defp catch_to_elixir(clauses) when is_list(clauses) do
     {catch_clauses, rescue_clauses} =
       clauses
-      |> Enum.map(fn {:"->", meta, [pattern, body]} ->
+      |> Enum.map(fn {:->, meta, [pattern, body]} ->
         # inspect_ast(pattern, label: :pattern)
         {guards, pattern} = Guard.pop_guard(pattern)
+
         case pattern do
           # Case where exception is an erlang exception wrapped into elixir's exception structure
           # Just like erlang's `undef` means the same as Elixir's `UndefinedFunctionError`
           [:error, exception] when is_variable(exception) ->
-            case extract_exceptions guards do
+            case extract_exceptions(guards) do
               # Clause for `any -> body` style exceptions
               [] ->
                 body = denormalize_catch_body(body, exception)
-                {nil, {:"->", meta, [[exception], body]}}
+                {nil, {:->, meta, [[exception], body]}}
 
               exceptions ->
-                rescue_pattern = [quote do: unquote(exception) in unquote(exceptions)]
+                rescue_pattern = [quote(do: unquote(exception) in unquote(exceptions))]
                 body = denormalize_catch_body(body, exception)
-                {nil, {:"->", meta, [rescue_pattern, body]}}
+                {nil, {:->, meta, [rescue_pattern, body]}}
             end
 
           [:throw, pattern] ->
-            {{:"->", meta, [Guard.append_guard([pattern], guards), body]}, nil}
+            {{:->, meta, [Guard.append_guard([pattern], guards), body]}, nil}
 
           [kind, pattern] ->
-            {{:"->", meta, [Guard.append_guard([kind, pattern], guards), body]}, nil}
+            {{:->, meta, [Guard.append_guard([kind, pattern], guards), body]}, nil}
 
           _ ->
-            {{:"->", meta, [Guard.append_guard([pattern], guards), body]}, nil}
+            {{:->, meta, [Guard.append_guard([pattern], guards), body]}, nil}
         end
-
       end)
       |> Enum.unzip()
 
@@ -924,9 +952,9 @@ defmodule Tria.Compiler.ElixirTranslator do
     case body do
       # First clause, where erlang's exception is normalized
       (tri do
-        x = tri dot_call(Exception, :normalize, _)
-        tri_splicing block
-      end) ->
+         x = tri(dot_call(Exception, :normalize, _))
+         tri_splicing(block)
+       end) ->
         {:__block__, [], [tri(x = exception) | block]}
 
       # Second clause where we don't use exception in `rescue`, therefore
@@ -936,25 +964,26 @@ defmodule Tria.Compiler.ElixirTranslator do
     end
   end
 
-  defp extract_exceptions(tri left when right) do
+  defp extract_exceptions(tri(left when right)) do
     # This concatenation is okay here, because it is not deep
     extract_exceptions(left) ++ extract_exceptions(right)
   end
 
   defp extract_exceptions(ast) do
     case ast do
-      {{:., _, [:erlang, :andalso]}, _, [
-        {{:., _, [Kernel, :==]}, _, [
-          {{:., _, [:erlang, :map_get]}, _, [:__struct__, _]},
-          exception
-        ]},
-        {{:., _, [:erlang, :map_get]}, _, [:__exception__, _]}
-      ]} ->
+      {{:., _, [:erlang, :andalso]}, _,
+       [
+         {{:., _, [Kernel, :==]}, _,
+          [
+            {{:., _, [:erlang, :map_get]}, _, [:__struct__, _]},
+            exception
+          ]},
+         {{:., _, [:erlang, :map_get]}, _, [:__exception__, _]}
+       ]} ->
         [exception]
 
       _ ->
         []
     end
   end
-
 end

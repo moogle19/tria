@@ -1,5 +1,4 @@
 defmodule Tria.Compiler.Manifest do
-
   @moduledoc """
   Compiler manifest.
 
@@ -17,15 +16,13 @@ defmodule Tria.Compiler.Manifest do
 
   import :erlang, only: [term_to_binary: 1, md5: 1]
 
-  @tria_version Tria.MixProject.project[:version]
+  @tria_version Tria.MixProject.project()[:version]
 
-  defstruct [
-    tria_version: @tria_version,
-    file_inputs: %{},
-    file_to_modules: %{},
-    function_inputs: %{},
-    graphs: %{}
-  ]
+  defstruct tria_version: @tria_version,
+            file_inputs: %{},
+            file_to_modules: %{},
+            function_inputs: %{},
+            graphs: %{}
 
   @opaque hash :: binary()
 
@@ -39,20 +36,20 @@ defmodule Tria.Compiler.Manifest do
   This structure represents state of inputs upon which the compilation occured
   """
   @type t :: %__MODULE__{
-    file_inputs: %{path() => hash()},
-    file_to_modules: file_to_modules(),
-    function_inputs: %{MFArity.mfarity() => hash()},
-    graphs: %{atom() => %{MFArity.t() => [MFArity.t()]}}
-  }
+          file_inputs: %{path() => hash()},
+          file_to_modules: file_to_modules(),
+          function_inputs: %{MFArity.mfarity() => hash()},
+          graphs: %{atom() => %{MFArity.t() => [MFArity.t()]}}
+        }
 
   @doc """
   Takes all currently present (or passed) graphs and stores them in the manifest
   """
   @spec reflect_graphs(t(), [FunctionGraph.t()]) :: t()
   def reflect_graphs(
-    %__MODULE__{graphs: existing_graphs} = manifest,
-    graphs \\ FunctionGraph.all_graphs()
-  ) do
+        %__MODULE__{graphs: existing_graphs} = manifest,
+        graphs \\ FunctionGraph.all_graphs()
+      ) do
     new_graphs = Map.new(graphs, fn graph -> {graph, FunctionGraph.to_map(graph)} end)
     graphs = Map.merge(existing_graphs, new_graphs, fn _k, l, r -> Map.merge(l, r) end)
     %__MODULE__{manifest | graphs: graphs}
@@ -65,8 +62,8 @@ defmodule Tria.Compiler.Manifest do
   """
   @spec format(file_to_modules(), [MFArity.mfarity()]) :: t()
   def format(file_to_modules, functions) do
-    file_hashes = hash_files Map.keys file_to_modules
-    function_hashes = hash_functions functions
+    file_hashes = hash_files(Map.keys(file_to_modules))
+    function_hashes = hash_functions(functions)
 
     %__MODULE__{
       file_inputs: file_hashes,
@@ -77,7 +74,7 @@ defmodule Tria.Compiler.Manifest do
 
   @spec diff_files(t(), [path()]) :: diff(path())
   def diff_files(%__MODULE__{file_inputs: was}, became) do
-    became = hash_files became
+    became = hash_files(became)
     different_keys(was, became)
   end
 
@@ -119,10 +116,13 @@ defmodule Tria.Compiler.Manifest do
   end
 
   @spec update_file_to_modules(t(), file_to_modules()) :: t()
-  def update_file_to_modules(%__MODULE__{
-    file_to_modules: file_to_modules,
-    file_inputs: file_inputs
-  } = manifest, new_file_to_modules \\ %{}) do
+  def update_file_to_modules(
+        %__MODULE__{
+          file_to_modules: file_to_modules,
+          file_inputs: file_inputs
+        } = manifest,
+        new_file_to_modules \\ %{}
+      ) do
     file_to_modules =
       file_to_modules
       |> Map.merge(new_file_to_modules)
@@ -136,9 +136,9 @@ defmodule Tria.Compiler.Manifest do
     %__MODULE__{manifest | file_to_modules: file_to_modules}
   end
 
-  #TODO optimize, load graph into ets and query ets
-  #TODO `depends` relation is actually transitive, we can save time
-  #by rerunning this function here, instead of relying on `each_cycle`
+  # TODO optimize, load graph into ets and query ets
+  # TODO `depends` relation is actually transitive, we can save time
+  # by rerunning this function here, instead of relying on `each_cycle`
   @spec compile_time_dependants(t(), [module()]) :: MapSet.t(module())
   def compile_time_dependants(%__MODULE__{graphs: %{depends: graph}}, modules) do
     Enum.reduce(modules, MapSet.new(), fn module, acc ->
@@ -154,13 +154,14 @@ defmodule Tria.Compiler.Manifest do
       MapSet.union(acc, new)
     end)
   end
+
   def compile_time_dependants(%__MODULE__{graphs: %{}}, _modules), do: MapSet.new()
 
   ### Hashing
 
   @spec hash_file(path()) :: hash()
   def hash_file(file) do
-    md5 File.read! file
+    md5(File.read!(file))
   end
 
   @spec hash_files([path()]) :: %{path() => hash()}
@@ -170,7 +171,7 @@ defmodule Tria.Compiler.Manifest do
 
   @spec hash_function(MFArity.mfarity()) :: binary()
   def hash_function(mfarity) do
-    hash_ast FunctionRepo.lookup(mfarity, :tria)
+    hash_ast(FunctionRepo.lookup(mfarity, :tria))
   end
 
   @spec hash_functions([MFArity.mfarity()]) :: %{MFArity.mfarity() => hash()}
@@ -180,6 +181,7 @@ defmodule Tria.Compiler.Manifest do
 
   @spec hash_ast(Tria.t()) :: binary()
   def hash_ast(nil), do: <<0>>
+
   def hash_ast(ast) do
     ast
     |> Meta.unmeta()
@@ -198,21 +200,24 @@ defmodule Tria.Compiler.Manifest do
   end
 
   defp do_diff(:none, right) when right == %{}, do: []
+
   defp do_diff(:none, right) do
     right
     |> Map.keys()
     |> Enum.map(fn key -> {:added, key} end)
   end
+
   defp do_diff({key, _, left}, right) when right == %{} do
     [{:removed, key} | do_diff(next(left), right)]
   end
+
   defp do_diff({key, value, left}, right) do
-    left = next left
+    left = next(left)
+
     case take(key, right) do
       {^value, right} -> do_diff(left, right)
       {_other, right} -> [{:changed, key} | do_diff(left, right)]
       :error -> [{:removed, key} | do_diff(left, right)]
     end
   end
-
 end

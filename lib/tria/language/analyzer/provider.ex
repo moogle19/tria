@@ -1,5 +1,4 @@
 defmodule Tria.Language.Analyzer.Provider do
-
   @moduledoc """
   Sometimes Purity analyzer is unable to find the definition for the function.
   Therefore some external interaction is required to provide information
@@ -32,5 +31,4 @@ defmodule Tria.Language.Analyzer.Provider do
         function
     end
   end
-
 end

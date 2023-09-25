@@ -1,5 +1,4 @@
 defmodule Tria.Language.Analyzer.Safety do
-
   @moduledoc """
   Analyzer which cheks if the given AST can or can not raise or
   throw and exception
@@ -22,30 +21,30 @@ defmodule Tria.Language.Analyzer.Safety do
       dot_call(module, function, args) = dotcall when is_atom(module) and is_atom(function) ->
         {module, function, length(args)}
         |> lookup(stack)
-        |> if(do: dotcall, else: throw false)
+        |> if(do: dotcall, else: throw(false))
 
       dot_call(_, _, _) ->
-        throw false
+        throw(false)
 
       {:fn, _, _} ->
         nil
 
       {:raise, _, _} ->
-        throw false
+        throw(false)
 
       {:throw, _, _} ->
-        throw false
+        throw(false)
 
       {:receive, _, [{:do, clauses} | _]} = ast ->
-        if complete_clauses?(clauses), do: ast, else: throw false
+        if complete_clauses?(clauses), do: ast, else: throw(false)
 
       {:case, _, [_arg, [do: clauses]]} = ast ->
-        if complete_clauses?(clauses), do: ast, else: throw false
+        if complete_clauses?(clauses), do: ast, else: throw(false)
 
       {:=, _, [left, right]} = ast ->
         case Interpreter.match(left, right) do
           {:yes, _} -> ast
-          _ -> throw false
+          _ -> throw(false)
         end
 
       other ->
@@ -53,26 +52,27 @@ defmodule Tria.Language.Analyzer.Safety do
     end)
 
     true
-    catch false -> false
+  catch
+    false -> false
   end
 
   defp complete_clauses?(clauses) do
-    Enum.any?(clauses, &match?({:"->", _, [[x], _]} when is_variable(x), &1))
+    Enum.any?(clauses, &match?({:->, _, [[x], _]} when is_variable(x), &1))
   end
 
   @kernel_safe [
-    {:>,   2},
-    {:>=,  2},
-    {:<,   2},
-    {:<=,  2},
+    {:>, 2},
+    {:>=, 2},
+    {:<, 2},
+    {:<=, 2},
     {:===, 2},
-    {:==,  2},
+    {:==, 2},
     {:!==, 2},
-    {:!=,  2},
-    {:||,  2},
-    {:&&,  2},
+    {:!=, 2},
+    {:||, 2},
+    {:&&, 2},
     {:max, 2},
-    {:min, 2},
+    {:min, 2}
   ]
 
   defp lookup({Kernel, function, arity}, _stack) when {function, arity} in @kernel_safe do
@@ -110,5 +110,4 @@ defmodule Tria.Language.Analyzer.Safety do
       FunctionRepo.insert(mfarity, :safe_cache, result)
     end
   end
-
 end

@@ -1,5 +1,4 @@
 defmodule Tria.Language do
-
   @moduledoc """
   Like `Macro`, but for Tria. Contains useful guards, macro and functions
   """
@@ -9,13 +8,14 @@ defmodule Tria.Language do
   """
   @spec empty_env(module() | nil, Path.t()) :: Macro.Env.t()
   def empty_env(module, file \\ "nofile") do
-    %Macro.Env{__ENV__ |
-      context: nil,
-      versioned_vars: %{},
-      module: module,
-      file: file,
-      function: nil,
-      line: 0
+    %Macro.Env{
+      __ENV__
+      | context: nil,
+        versioned_vars: %{},
+        module: module,
+        file: file,
+        function: nil,
+        line: 0
     }
   end
 
@@ -59,8 +59,8 @@ defmodule Tria.Language do
   """
   defguard is_reserved(name)
            when name in @reserved_words or
-                name in @special_forms_invalid or
-                name in @special_vars
+                  name in @special_forms_invalid or
+                  name in @special_vars
 
   @doc """
   Checks if given term is Tria context
@@ -71,9 +71,9 @@ defmodule Tria.Language do
   Checks if given name, meta, context make a Tria variable
   """
   defguard is_variable(name, meta, context)
+           # name not in @special_forms_invalid and
+           # name not in @reserved_words and
            when is_atom(name) and
-                  # name not in @special_forms_invalid and
-                  # name not in @reserved_words and
                   name not in @special_vars and
                   is_list(meta) and
                   is_context(context)
@@ -87,9 +87,9 @@ defmodule Tria.Language do
                   is_variable(element(t, 0), element(t, 1), element(t, 2))
 
   defguard same_variable?(left, right)
-           when is_variable(left) and is_variable(right)
-           and element(left, 0) == element(right, 0)
-           and element(left, 2) == element(right, 2)
+           when is_variable(left) and is_variable(right) and
+                  element(left, 0) == element(right, 0) and
+                  element(left, 2) == element(right, 2)
 
   @doc """
   Checks if given AST is a Tria variable (with integer or atom in context field)
@@ -126,10 +126,10 @@ defmodule Tria.Language do
   Checks if given AST is an Elixir variable (with integer in context field)
   """
   defguard is_elixir_variable(t)
+           # element(t, 0) not in @special_forms_invalid and
            when is_tuple(t) and
                   tuple_size(t) == 3 and
                   is_atom(element(t, 0)) and
-                  # element(t, 0) not in @special_forms_invalid and
                   element(t, 0) not in @special_vars and
                   is_list(element(t, 1)) and
                   is_atom(element(t, 2))
@@ -184,9 +184,10 @@ defmodule Tria.Language do
   Checks is passed AST is a collection or something
   """
   defguard is_collection(c)
-           when (is_tuple(c) and (tuple_size(c) == 2 or
-             (tuple_size(c) == 3 and element(c, 0) in ~w[{} %{}]a)))
-           or is_list(c)
+           when (is_tuple(c) and
+                   (tuple_size(c) == 2 or
+                      (tuple_size(c) == 3 and element(c, 0) in ~w[{} %{}]a))) or
+                  is_list(c)
 
   ## Debug
 
@@ -207,7 +208,8 @@ defmodule Tria.Language do
             {:_, meta, nil}
 
           {name, meta, ctx} = v when is_variable(v) ->
-            ctx_str = ctx && to_string(ctx) || "nil"
+            ctx_str = (ctx && to_string(ctx)) || "nil"
+
             case meta[:counter] do
               {ctx, counter} ->
                 {:"#{name}_#{ctx_str}_#{ctx}_#{counter}", meta, nil}
@@ -234,11 +236,11 @@ defmodule Tria.Language do
       # https://github.com/elixir-lang/elixir/issues/12162
       # https://github.com/elixir-lang/elixir/issues/12248
       |> prewalk(fn
-        {{:".", _, [:erlang, :binary_to_atom]}, _, [{:"<<>>", _, items}, :utf8]} ->
-          {{:".", [], [:erlang, :binary_to_atom]}, [], [{:"<<>>", [], items}, :utf1488]}
+        {{:., _, [:erlang, :binary_to_atom]}, _, [{:<<>>, _, items}, :utf8]} ->
+          {{:., [], [:erlang, :binary_to_atom]}, [], [{:<<>>, [], items}, :utf1488]}
 
-        {{:".", _, [List, :to_charlist]}, _, args} ->
-          {{:".", [], [{:__aliases__, [], [:List]}, :to_charlist]}, [], args}
+        {{:., _, [List, :to_charlist]}, _, args} ->
+          {{:., [], [{:__aliases__, [], [:List]}, :to_charlist]}, [], args}
 
         other ->
           other
@@ -246,7 +248,7 @@ defmodule Tria.Language do
       |> Macro.postwalk(fn
         {_op, meta, _ctx} = x ->
           if meta[:line] == highlight_line do
-            {:"HERE_HITS!", [], [x]}
+            {:HERE_HITS!, [], [x]}
           else
             x
           end
@@ -280,23 +282,23 @@ defmodule Tria.Language do
 
     if label do
       label = "#{label}: "
-      label_length = length String.graphemes label
+      label_length = length(String.graphemes(label))
       tab = for _ <- 1..label_length, do: " ", into: ""
 
       "#{label}#{string}"
       |> String.replace("\n", "\n" <> tab)
       |> IO.puts()
     else
-      IO.puts string
+      IO.puts(string)
     end
 
     ast
   rescue
     e ->
-      Debug.puts "\n=== Failed to inspect AST ==="
-      Debug.inspect opts, pretty: true, limit: :infinity, label: :failed_to_inspect_opts
-      Debug.inspect ast, pretty: true, limit: :infinity, label: :failed_to_inspect
-      Debug.puts "\n"
+      Debug.puts("\n=== Failed to inspect AST ===")
+      Debug.inspect(opts, pretty: true, limit: :infinity, label: :failed_to_inspect_opts)
+      Debug.inspect(ast, pretty: true, limit: :infinity, label: :failed_to_inspect)
+      Debug.puts("\n")
       reraise e, __STACKTRACE__
   end
 
@@ -315,10 +317,12 @@ defmodule Tria.Language do
           other
       end
 
-    dotmeta  = cmeta(__CALLER__, dotmeta)
+    dotmeta = cmeta(__CALLER__, dotmeta)
     callmeta = cmeta(__CALLER__, callmeta)
 
-    quote do: {{:., unquote(dotmeta), [unquote(module), unquote(function)]}, unquote(callmeta), unquote(args)}
+    quote do:
+            {{:., unquote(dotmeta), [unquote(module), unquote(function)]}, unquote(callmeta),
+             unquote(args)}
   end
 
   @doc """
@@ -326,7 +330,8 @@ defmodule Tria.Language do
   """
   defmacro dot_call(function, args) do
     quote do
-      {{:., unquote(cmeta __CALLER__), [unquote(function)]}, unquote(cmeta __CALLER__), unquote(args)}
+      {{:., unquote(cmeta(__CALLER__)), [unquote(function)]}, unquote(cmeta(__CALLER__)),
+       unquote(args)}
     end
   end
 
@@ -334,7 +339,7 @@ defmodule Tria.Language do
   Macro for pinning variables
   """
   defmacro pin(value, meta \\ nil) do
-    quote do: {:^, unquote(cmeta(__CALLER__, meta)), [unquote value]}
+    quote do: {:^, unquote(cmeta(__CALLER__, meta)), [unquote(value)]}
   end
 
   # C-Meta -- context-aware meta
@@ -350,6 +355,7 @@ defmodule Tria.Language do
   """
   @spec gen_uniq_vars(non_neg_integer()) :: [Tria.variable()]
   def gen_uniq_vars(0), do: []
+
   def gen_uniq_vars(n) do
     [gen_uniq_var() | gen_uniq_vars(n - 1)]
   end
@@ -367,7 +373,7 @@ defmodule Tria.Language do
   """
   @spec gen_uniq_context() :: Tria.context()
   def gen_uniq_context do
-    :erlang.unique_integer [:positive]
+    :erlang.unique_integer([:positive])
   end
 
   @spec unify_contexts(Tria.t()) :: Tria.t()
@@ -376,7 +382,8 @@ defmodule Tria.Language do
     ast
   end
 
-  @spec unify_contexts(Tria.t(), %{Tria.context() => Tria.context()}) :: {Tria.t(), %{Tria.context() => Tria.context()}}
+  @spec unify_contexts(Tria.t(), %{Tria.context() => Tria.context()}) ::
+          {Tria.t(), %{Tria.context() => Tria.context()}}
   def unify_contexts(ast, context_map) do
     prewalk(ast, context_map, fn
       {name, meta, context} = a, context_map when is_variable(a) ->
@@ -403,9 +410,11 @@ defmodule Tria.Language do
   def is_special_form({:when, _meta, _args}), do: true
   def is_special_form({name, _, _}) when name in @special_forms_invalid, do: true
   def is_special_form({name, _, _}) when name in @reserved_words, do: true
+
   def is_special_form({name, _meta, args}) when is_atom(name) do
     Macro.special_form?(name, length(args))
   end
+
   def is_special_form(_), do: false
 
   @doc """
@@ -420,11 +429,13 @@ defmodule Tria.Language do
   @spec quoted_literal?(Tria.t()) :: boolean()
   def quoted_literal?({:%{}, _, args}), do: quoted_literal?(args)
   def quoted_literal?({:{}, _, args}), do: quoted_literal?(args)
+
   def quoted_literal?({:<<>>, _, _} = binary) do
     binary
-    |> traverse_binary_inputs(true, fn ast, acc -> {ast, acc and quoted_literal? ast} end)
+    |> traverse_binary_inputs(true, fn ast, acc -> {ast, acc and quoted_literal?(ast)} end)
     |> elem(1)
   end
+
   def quoted_literal?({left, right}), do: quoted_literal?(left) and quoted_literal?(right)
   def quoted_literal?(list) when is_list(list), do: :lists.all(&quoted_literal?/1, list)
   def quoted_literal?(term), do: is_atom(term) or is_number(term) or is_binary(term)
@@ -453,7 +464,7 @@ defmodule Tria.Language do
 
       {:<<>>, _, _} = binary ->
         binary
-        |> traverse_binary_inputs(true, fn ast, acc -> {ast, acc and vared_literal? ast} end)
+        |> traverse_binary_inputs(true, fn ast, acc -> {ast, acc and vared_literal?(ast)} end)
         |> elem(1)
 
       [] ->
@@ -507,6 +518,7 @@ defmodule Tria.Language do
   end
 
   defp do_traverse_children(ctx, acc, _pre, _post) when is_context(ctx), do: {ctx, acc}
+
   defp do_traverse_children(args, acc, pre, post) when is_list(args) do
     :lists.mapfoldl(
       fn x, acc ->
@@ -561,48 +573,53 @@ defmodule Tria.Language do
     ast
   end
 
-  @spec context_prewalk(Tria.t(), acc, (Tria.t(), acc, context() -> {Tria.t(), acc}), context()) :: {Tria.t(), acc}
+  @spec context_prewalk(Tria.t(), acc, (Tria.t(), acc, context() -> {Tria.t(), acc}), context()) ::
+          {Tria.t(), acc}
         when acc: any()
   def context_prewalk(ast, acc, func, context)
+
   def context_prewalk(ast, acc, func, nil) do
     {ast, acc} = func.(ast, acc, nil)
+
     case ast do
-      {:"->", m, [[{:when, mw, pattern_and_guard}], body]} ->
+      {:->, m, [[{:when, mw, pattern_and_guard}], body]} ->
         {guard, pattern} = List.pop_at(pattern_and_guard, -1)
         {pattern, acc} = context_prewalk(pattern, acc, func, :match)
         {guard, acc} = context_prewalk(guard, acc, func, :guard)
         {body, acc} = context_prewalk(body, acc, func, nil)
-        { {:"->", m, [[{:when, mw, pattern ++ [guard]}], body]}, acc }
+        {{:->, m, [[{:when, mw, pattern ++ [guard]}], body]}, acc}
 
       {atom, m, [pattern, body]} when atom in ~w[-> = <-]a ->
         {pattern, acc} = context_prewalk(pattern, acc, func, :match)
         {body, acc} = context_prewalk(body, acc, func, nil)
-        { {atom, m, [pattern, body]}, acc }
+        {{atom, m, [pattern, body]}, acc}
 
       {left, right} ->
         {left, acc} = context_prewalk(left, acc, func, nil)
         {right, acc} = context_prewalk(right, acc, func, nil)
-        { {left, right}, acc }
+        {{left, right}, acc}
 
       [head | tail] ->
         {head, acc} = context_prewalk(head, acc, func, nil)
         {tail, acc} = context_prewalk(tail, acc, func, nil)
-        { [head | tail], acc }
+        {[head | tail], acc}
 
       {node, m, children} ->
         {node, acc} = context_prewalk(node, acc, func, nil)
         {children, acc} = context_prewalk(children, acc, func, nil)
-        { {node, m, children}, acc }
+        {{node, m, children}, acc}
 
       other ->
-        { other, acc }
+        {other, acc}
     end
   end
+
   def context_prewalk(ast, acc, func, :match) do
-    prewalk(ast, acc, & func.(&1, &2, :match))
+    prewalk(ast, acc, &func.(&1, &2, :match))
   end
+
   def context_prewalk(ast, acc, func, :guard) do
-    prewalk(ast, acc, & func.(&1, &2, :guard))
+    prewalk(ast, acc, &func.(&1, &2, :guard))
   end
 
   @spec findwalk(Tria.t(), (Tria.t() -> boolean())) :: boolean()
@@ -610,6 +627,7 @@ defmodule Tria.Language do
     postwalk(ast, fn ast ->
       if predicate.(ast), do: throw(:found), else: ast
     end)
+
     false
   catch
     :found -> true
@@ -626,9 +644,9 @@ defmodule Tria.Language do
   end
 
   ## Other non-Tria related helpers
-  #TODO think of a better place for them
+  # TODO think of a better place for them
 
-  @spec with_pdict(map | [{any(), any()}], (() -> result :: any())) :: result :: any()
+  @spec with_pdict(map | [{any(), any()}], (-> result :: any())) :: result :: any()
   def with_pdict(opts, func) do
     olds = for {key, value} <- opts, do: {key, Process.put(key, value)}
 
@@ -641,5 +659,4 @@ defmodule Tria.Language do
       end)
     end
   end
-
 end

@@ -1,5 +1,4 @@
 defmodule Tria.Optimizer.Pass.Peephole do
-
   @moduledoc """
   Simple peephole optimization which hits one-by-one
   """
@@ -17,45 +16,50 @@ defmodule Tria.Optimizer.Pass.Peephole do
     ast =
       case ssa_ast do
         # Optimizes `map.field` structure to dispatch to map where possible
-        tri([to_tria: :force],
+        tri(
+          [to_tria: :force],
           case input do
-           %{key => value} ->
-             value
+            %{key => value} ->
+              value
 
-           module when :erlang.andalso(
-             :erlang.is_atom(module),
-             :erlang.andalso(
-               Kernel.!==(module, nil),
-               :erlang.andalso(
-                 Kernel.!==(module, true),
-                 Kernel.!==(module, false)
-               )
-             )
-           ) ->
-             tri dot_call(input_or_module, key, [])
+            module
+            when :erlang.andalso(
+                   :erlang.is_atom(module),
+                   :erlang.andalso(
+                     Kernel.!==(module, nil),
+                     :erlang.andalso(
+                       Kernel.!==(module, true),
+                       Kernel.!==(module, false)
+                     )
+                   )
+                 ) ->
+              tri(dot_call(input_or_module, key, []))
 
-           other ->
-             :erlang.error({:badkey, key, input_or_other})
+            other ->
+              :erlang.error({:badkey, key, input_or_other})
           end
-        ) = ast when input_or_module in [input, module] and input_or_other in [input, other] ->
+        ) = ast
+        when input_or_module in [input, module] and input_or_other in [input, other] ->
           case Keyword.get(opts, :undot, :safe) do
             :force ->
               Tracer.tag_ast(ast, label: :hits_peephole_dot)
-              tri :erlang.map_get(key, input)
+              tri(:erlang.map_get(key, input))
 
             :safe ->
-              case FunctionRepo.exists_any?([:defined, :pure_cache, :pure, :callback], function: key, arity: 0) do
+              case FunctionRepo.exists_any?([:defined, :pure_cache, :pure, :callback],
+                     function: key,
+                     arity: 0
+                   ) do
                 false ->
                   Tracer.tag_ast(ast, label: :hits_peephole_dot)
-                  tri :erlang.map_get(key, input)
+                  tri(:erlang.map_get(key, input))
 
                 _ ->
                   ast
               end
 
-
             _ ->
-               ast
+              ast
           end
 
         other ->
@@ -76,15 +80,17 @@ defmodule Tria.Optimizer.Pass.Peephole do
             maybe_run_once(ast)
 
           ast, :stop ->
-            { ast, :stop }
+            {ast, :stop}
         end)
 
       ast
     after
       Process.cancel_timer(timer)
+
       receive do
         :timeout -> :ok
-        after 0 -> :ok
+      after
+        0 -> :ok
       end
     end
   end
@@ -98,8 +104,8 @@ defmodule Tria.Optimizer.Pass.Peephole do
 
     receive do
       :timeout -> {result, :stop}
-      after 0 -> {result, :run}
+    after
+      0 -> {result, :run}
     end
   end
-
 end

@@ -56,12 +56,19 @@ defmodule Tria.Language.FunctionGraph.Server do
     reference =
       case :ets.whereis(graph) do
         :undefined ->
-          :ets.new(graph, [:bag, :public, :named_table, read_concurrency: true, write_concurrency: true])
+          :ets.new(graph, [
+            :bag,
+            :public,
+            :named_table,
+            read_concurrency: true,
+            write_concurrency: true
+          ])
 
         ref ->
           if graph not in graphs and not opts[:existing] do
             raise "Table #{graph} already exists"
           end
+
           ref
       end
 

@@ -1,5 +1,4 @@
 defmodule Tria.Language.Analyzer do
-
   @moduledoc """
   Module with functions which perform some code analysis like
   cheking functions purity or safety
@@ -40,5 +39,4 @@ defmodule Tria.Language.Analyzer do
         nil
     end
   end
-
 end

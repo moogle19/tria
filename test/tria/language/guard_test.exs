@@ -9,14 +9,14 @@ defmodule Tria.Langauge.GuardTest do
     test "Truthy" do
       result =
         quote do
-          is_atom(a) and is_integer(i)
-          or (is_list(l) or is_map(m))
-          and length(l) == 4
-          and tuple_size(t) == 3
-          and map_size(m) == i
-          and i > 0
-          and "x" <> "y" == "xy"
-          and :erlang.map_get(m, 8 * (i - 1)) == :x
+          (is_atom(a) and is_integer(i)) or
+            ((is_list(l) or is_map(m)) and
+               length(l) == 4 and
+               tuple_size(t) == 3 and
+               map_size(m) == i and
+               i > 0 and
+               "x" <> "y" == "xy" and
+               :erlang.map_get(m, 8 * (i - 1)) == :x)
         end
         |> to_tria!(%{__ENV__ | context: :guard})
         |> is_guard()
@@ -27,13 +27,13 @@ defmodule Tria.Langauge.GuardTest do
     test "False function" do
       result =
         quote do
-          is_atom(a) and is_integer(i)
-          or (is_list(l) or is_map(m))
-          and length(l) == 4
-          and tuple_size(t) == 3
-          and map_size(m) == i
-          and i > 0
-          and function(x, y, z)
+          (is_atom(a) and is_integer(i)) or
+            ((is_list(l) or is_map(m)) and
+               length(l) == 4 and
+               tuple_size(t) == 3 and
+               map_size(m) == i and
+               i > 0 and
+               function(x, y, z))
         end
         |> to_tria!(%{__ENV__ | context: :guard})
         |> is_guard()
@@ -44,13 +44,13 @@ defmodule Tria.Langauge.GuardTest do
     test "False matching" do
       result =
         quote do
-          is_atom(a) and is_integer(i)
-          or (is_list(l) or is_map(m))
-          and length(l) == 4
-          and tuple_size(t) == 3
-          and map_size(m) == i
-          and i > 0
-          and (x = 1)
+          (is_atom(a) and is_integer(i)) or
+            ((is_list(l) or is_map(m)) and
+               length(l) == 4 and
+               tuple_size(t) == 3 and
+               map_size(m) == i and
+               i > 0 and
+               (x = 1))
         end
         |> to_tria!(%{__ENV__ | context: :guard})
         |> is_guard()

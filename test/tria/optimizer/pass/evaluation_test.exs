@@ -23,12 +23,33 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         FunctionRepo.insert({M, :"x#{i}", 0}, :safe_cache, false)
         FunctionRepo.insert({M, :"x#{i}", 0}, :pure_cache, false)
       end
+
       tri do
-        (M.x1(); M.x2()); (M.x3(); M.x4()); (M.x5(); M.x6(); M.x7())
+        (
+          M.x1()
+          M.x2()
+        )
+
+        (
+          M.x3()
+          M.x4()
+        )
+
+        (
+          M.x5()
+          M.x6()
+          M.x7()
+        )
       end
       |> run_while()
       |> assert_tri do
-        M.x1(); M.x2(); M.x3(); M.x4(); M.x5(); M.x6(); M.x7()
+        M.x1()
+        M.x2()
+        M.x3()
+        M.x4()
+        M.x5()
+        M.x6()
+        M.x7()
       end
     end
 
@@ -37,11 +58,17 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       FunctionRepo.insert({M, :f, 0}, :pure_cache, false)
 
       tri do
-        1; 2; M.f(); 3; 4; 5
+        1
+        2
+        M.f()
+        3
+        4
+        5
       end
       |> run_while()
       |> assert_tri do
-        M.f(); 5
+        M.f()
+        5
       end
     end
 
@@ -128,7 +155,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         z = 1
       end
 
-      assert_unique [x, y, z]
+      assert_unique([x, y, z])
     end
 
     test "Quoted literal composed" do
@@ -146,13 +173,14 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         list = [[1, 2], [1, 2]]
       end
 
-      assert_unique [x, y, z, list]
+      assert_unique([x, y, z, list])
     end
 
     test "Guard" do
       tri do
         x = 1
         y = 2
+
         case x do
           _ when y > z -> 1
           _ -> 2
@@ -162,19 +190,21 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       |> assert_tri do
         x = 1
         y = 2
+
         case 1 do
           _ when Kernel.>(2, z) -> 1
           _ -> 2
         end
       end
 
-      assert_unique [x, y, z]
+      assert_unique([x, y, z])
     end
 
     test "Guard propagation stops" do
       tri do
         x = function(x)
         y = 1
+
         case something do
           _ when x > y -> 1
           _ -> 2
@@ -183,13 +213,14 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       |> run_while()
       |> assert_tri do
         x2 = function(x1)
+
         case something do
           _ when Kernel.>(x2, 1) -> 1
           _ -> 2
         end
       end
 
-      assert_unique [x1, x2, something]
+      assert_unique([x1, x2, something])
     end
 
     test "Guard propagation recursive stops" do
@@ -197,6 +228,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         x = function()
         y = 1
         z = is_atom(x)
+
         case something do
           _ when z or :erlang.is_map_key(y, m) -> 1
           _ -> 2
@@ -207,20 +239,27 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         x = function()
         y = 1
         z = Kernel.is_atom(x)
+
         case something do
           _ when :erlang.orelse(Kernel.is_atom(x), :erlang.is_map_key(1, m)) -> 1
           _ -> 2
         end
       end
 
-      assert_unique [x, y, z, something, m]
+      assert_unique([x, y, z, something, m])
     end
 
     @tag skip: true
     test "Definitions in strange places" do
       tri do
-        x = (x = 1; y = x + 1)
+        x =
+          (
+            x = 1
+            y = x + 1
+          )
+
         z = [y = x + 1, x = y - 1]
+
         case z = z ++ z do
           ^z -> z
           z -> z
@@ -228,7 +267,12 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       end
       |> run_while(remove_unused: false)
       |> assert_tri do
-        x2 = (x1 = 1; y1 = 2)
+        x2 =
+          (
+            x1 = 1
+            y1 = 2
+          )
+
         z1 = [y2 = 3, x3 = 1]
         z2 = [3, 1, 3, 1]
       end
@@ -241,7 +285,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       end
       |> run_while()
       |> assert_tri do
-        [38, encode_pair func variable]
+        [38, encode_pair(func(variable))]
       end
     end
 
@@ -267,7 +311,9 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       |> run_while()
       |> assert_tri do
         Enum.flat_map(kv, fn
-          {_, 1} -> []
+          {_, 1} ->
+            []
+
           {field, value} ->
             [
               38,
@@ -303,7 +349,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         z = [2, 2]
       end
 
-      assert_unique [x1, x2, y1, y2, z]
+      assert_unique([x1, x2, y1, y2, z])
     end
 
     test "List, map, tuple and function arguments" do
@@ -312,12 +358,13 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
 
       tri do
         [x = 1, x = 2 | x = 3]
-        M.f(x) # Here we use `f` to make sure that block optimization does not kick in
+        # Here we use `f` to make sure that block optimization does not kick in
+        M.f(x)
 
         {y = 1, y = 2, y = 3}
         M.f(y)
 
-        %{z = %{} | x: (z = 2), x: (z = 3)}
+        %{(z = %{}) | x: z = 2, x: z = 3}
         M.f(z)
 
         f(a = 1, a = 2, a = 3)
@@ -348,18 +395,29 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         M.f(3)
       end
 
-      assert_unique [
-        x1, x2, x3,
-        y1, y2, y3,
-        z1, z2, z3,
-        a1, a2, a3,
-        b1, b2, b3,
-      ]
+      assert_unique([
+        x1,
+        x2,
+        x3,
+        y1,
+        y2,
+        y3,
+        z1,
+        z2,
+        z3,
+        a1,
+        a2,
+        a3,
+        b1,
+        b2,
+        b3
+      ])
     end
 
     test "Case clause context" do
       tri do
         x = 1
+
         case something do
           {:x, ^x} -> x
           {:x, x} -> x
@@ -370,6 +428,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       |> run_while(remove_unused: false)
       |> assert_tri do
         x1 = 1
+
         case something do
           {:x, 1} -> 1
           {:x, x2} -> x2
@@ -378,12 +437,13 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
       end
 
-      assert_unique [x1, x2, y1, y2, maybe, something]
+      assert_unique([x1, x2, y1, y2, maybe, something])
     end
 
     test "Fn clauses" do
       tri do
         x = 1
+
         fn
           1, ^x -> x
           1, x -> x
@@ -394,6 +454,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       |> run_while(remove_unused: false)
       |> assert_tri do
         x1 = 1
+
         fn
           1, 1 -> 1
           1, x2 -> x2
@@ -402,7 +463,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
       end
 
-      assert_unique [x1, x2, y, z, maybe]
+      assert_unique([x1, x2, y, z, maybe])
     end
   end
 
@@ -416,7 +477,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
         |> run_while()
 
-      assert 11 == last_line evaluated
+      assert 11 == last_line(evaluated)
     end
 
     test "x + y" do
@@ -432,7 +493,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         Kernel.+(Kernel.+(7, x), y)
       end
 
-      assert_unique [a, b, x, y]
+      assert_unique([a, b, x, y])
     end
   end
 
@@ -441,6 +502,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       evaluated =
         tri do
           x = 1
+
           case x do
             3 -> 3 + x
             2 -> 2 + x
@@ -450,12 +512,13 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
         |> run_while()
 
-      assert 2 == last_line evaluated
+      assert 2 == last_line(evaluated)
     end
 
     test "yes case by pattern" do
       x = {:x, [], 1}
       y = {:y, [], 1}
+
       evaluated =
         tri do
           case {x, y} do
@@ -467,7 +530,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
         |> run_while()
 
-      assert tri(Kernel.+(tri(^x), tri(^y))) = last_line evaluated
+      assert tri(Kernel.+(tri(^x), tri(^y))) = last_line(evaluated)
     end
 
     test "maybe case" do
@@ -510,7 +573,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
       end
 
-      assert_unique [x, y, l, something]
+      assert_unique([x, y, l, something])
     end
 
     test "same variable twice" do
@@ -532,6 +595,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
     test "outer context in guard" do
       tri do
         head = something
+
         case x do
           1 when head > 10 -> :ok
         end
@@ -558,21 +622,35 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
 
       # Why no tri? Well, because `assert` is buggy
       assert {
-        :case, _, [_arg, [do: [
-          {:"->", _, [
-            [{:when, _, [x,
-              {andd, _, [
-                {andd, _, [
-                  true,
-                  {more, _, [_y, 10]}
-                ]},
-                {more, _, [x, 10]}
-              ]}
-            ]}],
-            :ok
-          ]}
-        ]]]
-      } = evaluated
+               :case,
+               _,
+               [
+                 _arg,
+                 [
+                   do: [
+                     {:->, _,
+                      [
+                        [
+                          {:when, _,
+                           [
+                             x,
+                             {andd, _,
+                              [
+                                {andd, _,
+                                 [
+                                   true,
+                                   {more, _, [_y, 10]}
+                                 ]},
+                                {more, _, [x, 10]}
+                              ]}
+                           ]}
+                        ],
+                        :ok
+                      ]}
+                   ]
+                 ]
+               ]
+             } = evaluated
     end
 
     test "either case" do
@@ -625,44 +703,48 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       |> run_while()
       |> last_line()
       |> assert_tri do
-        GenServer.start_link(tri(__MODULE__), [], option: :value, restart: :temporary, name: tri(__MODULE__))
+        GenServer.start_link(tri(__MODULE__), [],
+          option: :value,
+          restart: :temporary,
+          name: tri(__MODULE__)
+        )
       end
     end
 
     test "Pathex-style fn inlining" do
       tri do
         (fn x, function ->
-          try do
-            {:ok,
-             case x do
-               %{0 => value} = map ->
-                 case function.(value) do
-                   {:ok, new_value} -> %{map | 0 => new_value}
-                   :delete_me -> Map.delete(map, 0)
-                   :error -> Kernel.throw(:path_not_found)
-                 end
+           try do
+             {:ok,
+              case x do
+                %{0 => value} = map ->
+                  case function.(value) do
+                    {:ok, new_value} -> %{map | 0 => new_value}
+                    :delete_me -> Map.delete(map, 0)
+                    :error -> Kernel.throw(:path_not_found)
+                  end
 
-               [x | _] = list ->
-                 case function.(:lists.nth(1, list)) do
-                   {:ok, new_value} -> List.replace_at(list, 0, new_value)
-                   :delete_me -> List.delete_at(list, 0)
-                   :error -> Kernel.throw(:path_not_found)
-                 end
+                [x | _] = list ->
+                  case function.(:lists.nth(1, list)) do
+                    {:ok, new_value} -> List.replace_at(list, 0, new_value)
+                    :delete_me -> List.delete_at(list, 0)
+                    :error -> Kernel.throw(:path_not_found)
+                  end
 
-               tuple when :erlang.andalso(is_tuple(tuple), tuple_size(tuple) > 0) ->
-                 case function.(:erlang.element(1, tuple)) do
-                   {:ok, new_value} -> :erlang.setelement(1, tuple, new_value)
-                   :delete_me -> :erlang.delete_element(1, tuple)
-                   :error -> Kernel.throw(:path_not_found)
-                 end
+                tuple when :erlang.andalso(is_tuple(tuple), tuple_size(tuple) > 0) ->
+                  case function.(:erlang.element(1, tuple)) do
+                    {:ok, new_value} -> :erlang.setelement(1, tuple, new_value)
+                    :delete_me -> :erlang.delete_element(1, tuple)
+                    :error -> Kernel.throw(:path_not_found)
+                  end
 
-               _ ->
-                 Kernel.throw(:path_not_found)
-             end}
-          catch
-            :path_not_found -> :error
-          end
-        end).({1, 2}, fn _ -> :delete_me end)
+                _ ->
+                  Kernel.throw(:path_not_found)
+              end}
+           catch
+             :path_not_found -> :error
+           end
+         end).({1, 2}, fn _ -> :delete_me end)
       end
       |> run_while()
       |> assert_tri do
@@ -673,29 +755,29 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
     test "Pathex-style fn inlining 2" do
       tri do
         case [1] do
-         %{0 => value} = map ->
-           case function.(value) do
-             {:ok, new_value} -> %{map | 0 => new_value}
-             :delete_me -> Map.delete(map, 0)
-             :error -> Kernel.throw(:path_not_found)
-           end
+          %{0 => value} = map ->
+            case function.(value) do
+              {:ok, new_value} -> %{map | 0 => new_value}
+              :delete_me -> Map.delete(map, 0)
+              :error -> Kernel.throw(:path_not_found)
+            end
 
-         [x | _] = list ->
-           case function.(:lists.nth(1, list)) do
-             {:ok, new_value} -> List.replace_at(list, 0, new_value)
-             :delete_me -> List.delete_at(list, 0)
-             :error -> Kernel.throw(:path_not_found)
-           end
+          [x | _] = list ->
+            case function.(:lists.nth(1, list)) do
+              {:ok, new_value} -> List.replace_at(list, 0, new_value)
+              :delete_me -> List.delete_at(list, 0)
+              :error -> Kernel.throw(:path_not_found)
+            end
 
-         tuple when :erlang.andalso(is_tuple(tuple), tuple_size(tuple) > 0) ->
-           case function.(:erlang.element(1, tuple)) do
-             {:ok, new_value} -> :erlang.setelement(1, tuple, new_value)
-             :delete_me -> :erlang.delete_element(1, tuple)
-             :error -> Kernel.throw(:path_not_found)
-           end
+          tuple when :erlang.andalso(is_tuple(tuple), tuple_size(tuple) > 0) ->
+            case function.(:erlang.element(1, tuple)) do
+              {:ok, new_value} -> :erlang.setelement(1, tuple, new_value)
+              :delete_me -> :erlang.delete_element(1, tuple)
+              :error -> Kernel.throw(:path_not_found)
+            end
 
-         _ ->
-           Kernel.throw(:path_not_found)
+          _ ->
+            Kernel.throw(:path_not_found)
         end
       end
       |> run_while()
@@ -707,7 +789,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
       end
 
-      assert_unique [function, new_value]
+      assert_unique([function, new_value])
     end
 
     test "Pathex-style fn inlining 3" do
@@ -720,7 +802,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       end
       |> run_while()
       |> assert_tri do
-        Kernel.throw :path_not_found
+        Kernel.throw(:path_not_found)
       end
     end
 
@@ -738,50 +820,50 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
     test "Pathex-style fn in fn" do
       tri do
         variable_0 = fn
-         :update, {x, function} ->
-           case x do
-             %{"x" => x} = map ->
-               with {:ok, y} <- function.(x) do
-                 {:ok, %{map | "x" => y}}
-               end
+          :update, {x, function} ->
+            case x do
+              %{"x" => x} = map ->
+                with {:ok, y} <- function.(x) do
+                  {:ok, %{map | "x" => y}}
+                end
 
-             _ ->
-               :error
-           end
+              _ ->
+                :error
+            end
 
-         :view, {x, function} ->
-           case x do
-             %{"x" => x} -> function.(x)
-             _ -> :error
-           end
-         end
+          :view, {x, function} ->
+            case x do
+              %{"x" => x} -> function.(x)
+              _ -> :error
+            end
+        end
 
-         variable_1 = fn
-           :update, {x, function} ->
-             case x do
-               %{"y" => x} = map ->
-                 with {:ok, y} <- function.(x) do
-                   {:ok, %{map | "y" => y}}
-                 end
+        variable_1 = fn
+          :update, {x, function} ->
+            case x do
+              %{"y" => x} = map ->
+                with {:ok, y} <- function.(x) do
+                  {:ok, %{map | "y" => y}}
+                end
 
-               _ ->
-                 :error
-             end
+              _ ->
+                :error
+            end
 
-           :view, {x, function} ->
-             case x do
-               %{"y" => x} -> function.(x)
-               _ -> :error
-             end
-         end
+          :view, {x, function} ->
+            case x do
+              %{"y" => x} -> function.(x)
+              _ -> :error
+            end
+        end
 
-         fn
-           :view, {x, func} ->
-             variable_0.(:view, {x, fn x -> variable_1.(:view, {x, func}) end})
+        fn
+          :view, {x, func} ->
+            variable_0.(:view, {x, fn x -> variable_1.(:view, {x, func}) end})
 
-           :update, {x, func} ->
-             variable_0.(:update, {x, fn x -> variable_1.(:update, {x, func}) end})
-         end
+          :update, {x, func} ->
+            variable_0.(:update, {x, fn x -> variable_1.(:update, {x, func}) end})
+        end
       end
       |> run_while()
       |> last_line()
@@ -821,7 +903,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
       end
 
-      assert_unique [x1, x2, x3, x4, x5, x6, x7, y1, y2]
+      assert_unique([x1, x2, x3, x4, x5, x6, x7, y1, y2])
     end
   end
 
@@ -834,7 +916,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
         |> run_while()
 
-      assert [1, 2, 3] == last_line evaluated
+      assert [1, 2, 3] == last_line(evaluated)
     end
 
     test "Concat" do
@@ -845,7 +927,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
         |> run_while()
 
-      assert [1, 2, 3] == last_line evaluated
+      assert [1, 2, 3] == last_line(evaluated)
     end
 
     test "Concat and prepend" do
@@ -856,7 +938,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
         |> run_while()
 
-      assert [1, 2, 3] == last_line evaluated
+      assert [1, 2, 3] == last_line(evaluated)
     end
   end
 
@@ -893,7 +975,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         <<block::binary-size(data_size), rest::binary>> = bin
       end
 
-      assert_unique [data_size, block_size, rest, bin, block]
+      assert_unique([data_size, block_size, rest, bin, block])
     end
 
     test "one" do
@@ -963,7 +1045,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
       end
 
-      assert_unique [x1, x2, x3]
+      assert_unique([x1, x2, x3])
     end
 
     test "fn" do
@@ -971,9 +1053,9 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         case x do
           %{"x" => x} ->
             (fn
-              %{"x" => x} -> 10 + 10
-              _ -> :error
-            end).(x)
+               %{"x" => x} -> 10 + 10
+               _ -> :error
+             end).(x)
 
           _ ->
             :error
@@ -993,7 +1075,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
       end
 
-      assert_unique [x1, x2, x3]
+      assert_unique([x1, x2, x3])
     end
 
     test "real" do
@@ -1015,8 +1097,8 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         end
 
         fn
-         :view, {x, func} ->
-           variable_0.(:view, {x, fn x -> variable_1.(:view, {x, func}) end})
+          :view, {x, func} ->
+            variable_0.(:view, {x, fn x -> variable_1.(:view, {x, func}) end})
         end
       end
       |> run_while()
@@ -1031,12 +1113,13 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
                   _ -> :error
                 end
 
-              _ -> :error
+              _ ->
+                :error
             end
         end
       end
 
-      assert_unique [x1, x2, x3]
+      assert_unique([x1, x2, x3])
     end
   end
 
@@ -1048,11 +1131,11 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
            _ -> :error
          end
        end).(x, fn x ->
-         case x do
-           %{"y" => x} -> x
-           _ -> :error
-         end
-       end)
+        case x do
+          %{"y" => x} -> x
+          _ -> :error
+        end
+      end)
     end
     |> run_while()
     |> assert_tri do
@@ -1071,26 +1154,26 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       end
     end
 
-    assert_unique [x1, x2, x3]
+    assert_unique([x1, x2, x3])
   end
 
   test "Inlining isolation 2" do
     tri do
       (fn x, function ->
-        case x do
-          %{3 => x} ->
-            function.(x)
+         case x do
+           %{3 => x} ->
+             function.(x)
 
-          [_, _, _, x | _] ->
-            function.(x)
+           [_, _, _, x | _] ->
+             function.(x)
 
-          tuple when :erlang.andalso(is_tuple(tuple), tuple_size(tuple) > 3) ->
-            function.(:erlang.element(4, tuple))
+           tuple when :erlang.andalso(is_tuple(tuple), tuple_size(tuple) > 3) ->
+             function.(:erlang.element(4, tuple))
 
-          _ ->
-            :error
-        end
-      end).(input, fn x -> {:ok, x} end)
+           _ ->
+             :error
+         end
+       end).(input, fn x -> {:ok, x} end)
     end
     |> run_while()
     |> last_line()
@@ -1102,7 +1185,8 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         [_, _, _, x2 | _] ->
           {:ok, x2}
 
-        tuple when :erlang.andalso(Kernel.is_tuple(tuple), Kernel.>(Kernel.tuple_size(tuple), 3)) ->
+        tuple
+        when :erlang.andalso(Kernel.is_tuple(tuple), Kernel.>(Kernel.tuple_size(tuple), 3)) ->
           x3 = :erlang.element(4, input)
           {:ok, x3}
 
@@ -1111,12 +1195,12 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
       end
     end
 
-    assert_unique [x1, x2, x3, tuple, input]
+    assert_unique([x1, x2, x3, tuple, input])
   end
 
   describe "Structure" do
     defmodule S do
-      defstruct [x: 1]
+      defstruct x: 1
     end
 
     test "Defined variable remains present" do
@@ -1140,7 +1224,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
           end)
       end
 
-      assert_unique [with_key, without_key, key, list]
+      assert_unique([with_key, without_key, key, list])
     end
   end
 
@@ -1159,7 +1243,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         f(y, y)
       end
 
-      assert_unique [x, y]
+      assert_unique([x, y])
     end
 
     @tag skip: true
@@ -1175,7 +1259,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         bar
       end
 
-      assert_unique [y, z, bar, foo]
+      assert_unique([y, z, bar, foo])
     end
 
     @tag skip: true
@@ -1193,24 +1277,39 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
         {Kernel.+(a, b), [c, c, c], [1, 2, 3], impure}
       end
 
-      assert_unique [a, b, c, impure]
+      assert_unique([a, b, c, impure])
     end
 
     @tag skip: true
     test "Block unused removal with fn" do
       FunctionRepo.insert({M, :f, 0}, :pure_cache, false)
       FunctionRepo.insert({M, :f, 0}, :safe_cache, false)
+
       tri do
-        x = [1, fn x -> y = M.f(); x + y end]
+        x = [
+          1,
+          fn x ->
+            y = M.f()
+            x + y
+          end
+        ]
+
         {x, x}
       end
       |> run_while()
       |> assert_tri do
-        x1 = [1, fn x2 -> y = M.f(); Kernel.+(x2, y) end]
+        x1 = [
+          1,
+          fn x2 ->
+            y = M.f()
+            Kernel.+(x2, y)
+          end
+        ]
+
         {x1, x1}
       end
 
-      assert_unique [x1, x2, y]
+      assert_unique([x1, x2, y])
     end
 
     @tag skip: true
@@ -1270,6 +1369,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
     test "Case argument unfolding" do
       tri do
         x = IO.inspect(y)
+
         case x do
           z -> z + z
         end
@@ -1303,7 +1403,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
           binary ->
             case validate_utf8 do
               true ->
-                throw :oops
+                throw(:oops)
 
               _ ->
                 nil
@@ -1323,7 +1423,7 @@ defmodule Tria.Optimizer.Pass.EvaluationTest do
           binary ->
             case validate_utf8 do
               true ->
-                Kernel.throw :oops
+                Kernel.throw(:oops)
 
               _ ->
                 nil

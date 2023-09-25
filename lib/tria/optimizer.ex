@@ -1,5 +1,4 @@
 defmodule Tria.Optimizer do
-
   @moduledoc """
   Main optimizing pipeline
   """
@@ -28,12 +27,11 @@ defmodule Tria.Optimizer do
   defp run_while(ast, opts) do
     opts = Keyword.put(opts, :return_depmap, true)
 
-    {ast, evaluation_depmap}  = Evaluation.run_while(ast, opts)
+    {ast, evaluation_depmap} = Evaluation.run_while(ast, opts)
     {ast, enum_fusion_depmap} = EnumFusion.run_while(ast, opts)
 
     depmap = Depmap.merge(evaluation_depmap, enum_fusion_depmap)
 
     {Peephole.run_while(ast), depmap}
   end
-
 end

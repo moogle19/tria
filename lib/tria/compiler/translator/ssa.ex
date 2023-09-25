@@ -1,5 +1,4 @@
 defmodule Tria.Compiler.SSATranslator do
-
   @moduledoc """
   SSA form is a subset of Tria language.
   """
@@ -9,10 +8,8 @@ defmodule Tria.Compiler.SSATranslator do
   import Tria.Language
   import Tria.Language.Meta
 
-  defstruct [
-    pin_known:    false,
-    translations: %{}
-  ]
+  defstruct pin_known: false,
+            translations: %{}
 
   @typedoc """
   - `:pin_known` -- For translating from Erlang, since it has no pins for variables
@@ -47,11 +44,13 @@ defmodule Tria.Compiler.SSATranslator do
   also returns a state of SSATranslator after traversal
   """
   def from_tria(ast, opts \\ [])
-  def from_tria([{:"->", _, _}] = clauses, opts) do
+
+  def from_tria([{:->, _, _}] = clauses, opts) do
     with {{:fn, _, clauses}, translations} <- from_tria({:fn, [], clauses}, opts) do
       {clauses, translations}
     end
   end
+
   def from_tria(ast, opts) do
     run(ast, %__MODULE__{pin_known: Keyword.get(opts, :pin_known, false)})
   end
@@ -74,30 +73,30 @@ defmodule Tria.Compiler.SSATranslator do
       # Block
       {:__block__, meta, lines} ->
         {lines, translations} = Enum.map_reduce(lines, translations, &run/2)
-        { {:__block__, meta, lines}, translations }
+        {{:__block__, meta, lines}, translations}
 
       # Equals
       {:=, meta, [left, right]} ->
         {left, left_translations} = propagate_to_pattern(left, translations)
         {right, right_translations} = run(right, translations)
-        { {:=, meta, [left, right]}, right_translations <~ left_translations }
+        {{:=, meta, [left, right]}, right_translations <~ left_translations}
 
       # Case
       {:case, meta, [arg, [do: clauses]]} ->
         {arg, translations} = run(arg, translations)
         clauses = run_clauses(clauses, translations)
-        { {:case, meta, [arg, [{:do, clauses}]]}, translations }
+        {{:case, meta, [arg, [{:do, clauses}]]}, translations}
 
       # Receive
       {:receive, meta, [[do: clauses]]} ->
         clauses = run_clauses(clauses, translations)
-        { {:receive, meta, [[do: clauses]]}, translations }
+        {{:receive, meta, [[do: clauses]]}, translations}
 
       {:receive, meta, [[do: clauses, after: {left, right}]]} ->
         clauses = run_clauses(clauses, translations)
         {left, left_translations} = run(left, translations)
         {right, _} = run(right, left_translations)
-        { {:receive, meta, [[do: clauses, after: {left, right}]]}, translations }
+        {{:receive, meta, [[do: clauses, after: {left, right}]]}, translations}
 
       # Try
       {:try, meta, [parts]} ->
@@ -112,22 +111,23 @@ defmodule Tria.Compiler.SSATranslator do
               {else_catch, clauses}
           end)
 
-        { {:try, meta, [parts]}, translations }
+        {{:try, meta, [parts]}, translations}
 
       # Cond
       {:cond, meta, [[do: clauses]]} ->
         clauses =
-          Enum.map(clauses, fn {:"->", meta, [left, right]} ->
+          Enum.map(clauses, fn {:->, meta, [left, right]} ->
             {left, translations} = run(left, translations)
             {right, _} = run(right, translations)
-            {:"->", meta, [left, right]}
+            {:->, meta, [left, right]}
           end)
-        { {:cond, meta, [[do: clauses]]}, translations }
+
+        {{:cond, meta, [[do: clauses]]}, translations}
 
       # Fn
       {:fn, meta, clauses} ->
         clauses = run_fn_clauses(clauses, translations)
-        { {:fn, meta, clauses}, translations }
+        {{:fn, meta, clauses}, translations}
 
       # For
       {:for, meta, iters_opts_body} ->
@@ -139,17 +139,17 @@ defmodule Tria.Compiler.SSATranslator do
 
         body =
           case body do
-            {:"->", meta, [left, right]} ->
+            {:->, meta, [left, right]} ->
               {left, left_translations} = propagate_to_pattern(left, inner_translations)
               {right, _right_translations} = run(right, inner_translations <~ left_translations)
-              {:"->", meta, [left, right]}
+              {:->, meta, [left, right]}
 
             body ->
               {body, _translations} = run(body, inner_translations)
               body
           end
 
-        { {:for, meta, iters ++ [opts ++ [do: body]]}, translations }
+        {{:for, meta, iters ++ [opts ++ [do: body]]}, translations}
 
       # With
       {:with, meta, clauses} ->
@@ -169,8 +169,9 @@ defmodule Tria.Compiler.SSATranslator do
 
       # Map cons
       # TODO think about joining in map cons
-      {:"%{}", map_meta, [{:"|", cons_meta, [map, pairs]}]} ->
+      {:%{}, map_meta, [{:|, cons_meta, [map, pairs]}]} ->
         {map, map_translations} = run(map, translations)
+
         {pairs, translations} =
           Enum.map_reduce(pairs, map_translations, fn {key, value}, new_translations ->
             {key, key_translations} = run(key, translations)
@@ -178,10 +179,10 @@ defmodule Tria.Compiler.SSATranslator do
             {{key, value}, new_translations <~ key_translations <~ value_translations}
           end)
 
-        { {:"%{}", map_meta, [{:"|", cons_meta, [map, pairs]}]}, translations }
+        {{:%{}, map_meta, [{:|, cons_meta, [map, pairs]}]}, translations}
 
       # Map
-      {:"%{}", meta, pairs} ->
+      {:%{}, meta, pairs} ->
         {pairs, translations} =
           Enum.map_reduce(pairs, translations, fn {key, value}, new_translations ->
             {key, key_translations} = run(key, translations)
@@ -189,27 +190,27 @@ defmodule Tria.Compiler.SSATranslator do
             {{key, value}, new_translations <~ key_translations <~ value_translations}
           end)
 
-        { {:"%{}", meta, pairs}, translations }
+        {{:%{}, meta, pairs}, translations}
 
       # Binary
-      {:"<<>>", meta, items} ->
+      {:<<>>, meta, items} ->
         {items, translationss} =
           Enum.map(items, fn
             {:"::", meta, [item, type]} ->
               {type, _} = run(type, translations)
               {item, translations} = run(item, translations)
-              { {:"::", meta, [item, type]}, translations }
+              {{:"::", meta, [item, type]}, translations}
 
             item ->
               run(item, translations)
           end)
           |> Enum.unzip()
 
-        { {:"<<>>", meta, items}, merge_translationss(translationss) }
+        {{:<<>>, meta, items}, merge_translationss(translationss)}
 
       # Empty list
       [] ->
-        { [], translations }
+        {[], translations}
 
       # List
       items when is_list(items) ->
@@ -222,23 +223,23 @@ defmodule Tria.Compiler.SSATranslator do
           |> Enum.map(fn item -> run(item, translations) end)
           |> Enum.unzip()
 
-        { items, merge_translationss(translationss) }
+        {items, merge_translationss(translationss)}
 
       # Twople
       {left, right} ->
         {left, left_translations} = run(left, translations)
         {right, right_translations} = run(right, translations)
-        { {left, right}, left_translations <~ right_translations }
+        {{left, right}, left_translations <~ right_translations}
 
       # Tuple
       {:{}, meta, items} ->
         {items, translations} = run(items, translations)
-        { {:{}, meta, items}, translations }
+        {{:{}, meta, items}, translations}
 
       # Dot
       {:., dotmeta, dot} ->
         {dot, dot_translations} = run(dot, translations)
-        { {:., dotmeta, dot}, dot_translations }
+        {{:., dotmeta, dot}, dot_translations}
 
       # Calls and forms
       {caller, meta, args} ->
@@ -252,7 +253,7 @@ defmodule Tria.Compiler.SSATranslator do
 
       # Literal
       other ->
-        { other, translations }
+        {other, translations}
     end
   end
 
@@ -260,10 +261,10 @@ defmodule Tria.Compiler.SSATranslator do
 
   defp run_left_arrow_clauses(clauses, translations) do
     Enum.map_reduce(clauses, translations, fn
-      {:"<-", meta, [left, right]}, translations ->
+      {:<-, meta, [left, right]}, translations ->
         {left, left_translations} = propagate_to_pattern(left, translations)
         {right, _right_translations} = run(right, translations)
-        { {:"<-", meta, [left, right]}, translations <~ left_translations }
+        {{:<-, meta, [left, right]}, translations <~ left_translations}
 
       other, translations ->
         run(other, translations)
@@ -271,18 +272,20 @@ defmodule Tria.Compiler.SSATranslator do
   end
 
   defp run_clauses(clauses, translations) do
-    Enum.map(clauses, fn {:"->", meta, [left, right]} ->
+    Enum.map(clauses, fn {:->, meta, [left, right]} ->
       {left, left_translations} = propagate_to_pattern(left, translations)
       {right, _} = run(right, translations <~ left_translations)
-      {:"->", meta, [left, right]}
+      {:->, meta, [left, right]}
     end)
   end
 
   defp run_fn_clauses(clauses, translations) do
-    Enum.map(clauses, fn {:"->", meta, [left, right]} ->
-      {left, left_translations} = propagate_to_pattern(left, %__MODULE__{translations | pin_known: false})
+    Enum.map(clauses, fn {:->, meta, [left, right]} ->
+      {left, left_translations} =
+        propagate_to_pattern(left, %__MODULE__{translations | pin_known: false})
+
       {right, _} = run(right, translations <~ left_translations)
-      {:"->", meta, [left, right]}
+      {:->, meta, [left, right]}
     end)
   end
 
@@ -308,10 +311,11 @@ defmodule Tria.Compiler.SSATranslator do
               {with_meta(variable, meta), new_translations}
           end
 
-        key = unmeta variable
+        key = unmeta(variable)
+
         case translations do
           %__MODULE__{pin_known: true, translations: %{^key => value}} ->
-            pinned = pin with_meta(value, meta)
+            pinned = pin(with_meta(value, meta))
             {pinned, new_translations}
 
           _ ->
@@ -319,7 +323,7 @@ defmodule Tria.Compiler.SSATranslator do
         end
 
       # Binary matching is special because pinning is not required for variables in types
-      {:"<<>>", meta, items} ->
+      {:<<>>, meta, items} ->
         {items, new_translations} =
           Enum.map_reduce(items, new_translations, fn
             {:"::", meta, [item, type]}, new_translations ->
@@ -327,7 +331,8 @@ defmodule Tria.Compiler.SSATranslator do
               {type, _} = run(type, translations <~ new_translations)
 
               # And then we get definitions from left side of ::
-              {item, new_translations} = propagate_to_pattern(item, translations, new_translations)
+              {item, new_translations} =
+                propagate_to_pattern(item, translations, new_translations)
 
               {{:"::", meta, [item, type]}, new_translations}
 
@@ -335,12 +340,14 @@ defmodule Tria.Compiler.SSATranslator do
               propagate_to_pattern(item, translations, new_translations)
           end)
 
-        {{:"<<>>", meta, items}, new_translations}
+        {{:<<>>, meta, items}, new_translations}
 
       # When
       {:when, meta, pattern_and_guard} ->
         {guard, patterns} = List.pop_at(pattern_and_guard, -1)
-        {patterns, pattern_translations} = propagate_to_pattern(patterns, translations, new_translations)
+
+        {patterns, pattern_translations} =
+          propagate_to_pattern(patterns, translations, new_translations)
 
         # Since guard is not creating new variables, we can just run evaluation against it
         {guard, _guard_translations} = run(guard, translations <~ pattern_translations)
@@ -384,22 +391,25 @@ defmodule Tria.Compiler.SSATranslator do
   ## Helpers for working with translations
 
   defp merge_translationss([]), do: %__MODULE__{}
+
   defp merge_translationss(translationss) when is_list(translationss) do
     Enum.reduce(translationss, fn right, left -> left <~ right end)
   end
 
-  defp %__MODULE__{pin_known: lpin, translations: left} <~ %__MODULE__{pin_known: rpin, translations: right} do
+  defp %__MODULE__{pin_known: lpin, translations: left}
+       <~ %__MODULE__{pin_known: rpin, translations: right} do
     %__MODULE__{translations: Map.merge(left, right), pin_known: lpin or rpin}
   end
 
   defp put_translation(%{translations: translations} = state, key, value) do
-    key = unmeta key
-    value = unmeta value
+    key = unmeta(key)
+    value = unmeta(value)
     %{state | translations: Map.put(translations, key, value)}
   end
 
   defp fetch_translation(%{translations: translations} = state, key) do
-    key = unmeta key
+    key = unmeta(key)
+
     case translations do
       %{^key => value} ->
         with :error <- fetch_translation(state, value) do
@@ -416,5 +426,4 @@ defmodule Tria.Compiler.SSATranslator do
   defp unify({varname, meta, _context}) do
     {varname, meta, gen_uniq_context()}
   end
-
 end

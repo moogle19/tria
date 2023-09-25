@@ -4,7 +4,7 @@ defmodule Tria.Language.FunctionGraphTest do
   alias Tria.Language.FunctionGraph
 
   setup do
-    graph = :"#{__MODULE__}_#{:erlang.unique_integer [:positive]}"
+    graph = :"#{__MODULE__}_#{:erlang.unique_integer([:positive])}"
     FunctionGraph.to_list(graph)
     {:ok, graph: graph}
   end
@@ -100,5 +100,4 @@ defmodule Tria.Language.FunctionGraphTest do
 
     assert [{^g, ^h}] = FunctionGraph.to_list(graph)
   end
-
 end

@@ -1,5 +1,4 @@
 defmodule Tria.Compiler.Annotations do
-
   @moduledoc """
   Helper for working with tria annotations.
   An annotation is an ability for the user to mark the traits of functions.
@@ -26,9 +25,10 @@ defmodule Tria.Compiler.Annotations do
   `:pure` (boolean) -- defines whether function is pure or not
   `:optimize` (boolean) -- defines whether to optimize the function or not
   """
-  @type annotation :: {:safe, boolean()}
-  | {:pure, boolean()}
-  | {:optimize, boolean()}
+  @type annotation ::
+          {:safe, boolean()}
+          | {:pure, boolean()}
+          | {:optimize, boolean()}
 
   @type t :: [annotation()]
 
@@ -68,23 +68,27 @@ defmodule Tria.Compiler.Annotations do
   @doc """
   Puts passed annotation for mfarity or signature
   """
-  @spec put_annotation(MFArity.mfarity() | Compiler.signature(), atom(), any()) :: :ok | {:error, {:kind_not_supported, atom()}}
+  @spec put_annotation(MFArity.mfarity() | Compiler.signature(), atom(), any()) ::
+          :ok | {:error, {:kind_not_supported, atom()}}
   def put_annotation({module, kind, name, arity}, key, value) when kind in ~w[def defp]a do
     put_annotation({module, name, arity}, key, value)
   end
+
   def put_annotation({_module, kind, _name, _arity}, _key, _value) do
     {:error, {:kind_not_supported, kind}}
   end
+
   def put_annotation(mfarity, key, value) when is_mfarity(mfarity) and key in ~w[pure safe]a do
     FunctionRepo.insert(mfarity, :"#{key}_cache", value)
     :ok
   end
+
   def put_annotation(mfarity, key, value) when is_mfarity(mfarity) and key in ~w[optimize]a do
     FunctionRepo.insert(mfarity, key, value)
     :ok
   end
+
   def put_annotation(mfarity, key, _value) when is_mfarity(mfarity) do
     {:error, {:unknown_key, key}}
   end
-
 end

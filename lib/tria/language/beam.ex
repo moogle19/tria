@@ -1,5 +1,4 @@
 defmodule Tria.Language.Beam do
-
   @moduledoc """
   Module with wrappers around beam_lib and code modules
   which is used to fetch ast in abstract format and other
@@ -75,7 +74,7 @@ defmodule Tria.Language.Beam do
         bin
 
       :error ->
-        raise "Object code for module #{inspect module} not found"
+        raise "Object code for module #{inspect(module)} not found"
     end
   end
 
@@ -165,6 +164,7 @@ defmodule Tria.Language.Beam do
   @spec attributes(abstract_code(), [atom()]) :: %{atom() => [any()]}
   def attributes(abstract_code, names) do
     acc = Map.new(names, fn name -> {name, []} end)
+
     Enum.reduce(abstract_code, acc, fn
       {:attribute, _, name, value}, acc ->
         if name in names do
@@ -186,7 +186,9 @@ defmodule Tria.Language.Beam do
   @spec tria(abstract_code(), MFArity.mfarity()) :: Tria.t() | nil
   def tria(abstract_code, {module, name, arity}) when is_mfarity(module, name, arity) do
     case abstract(abstract_code, name, arity) do
-      nil -> nil
+      nil ->
+        nil
+
       abstract ->
         clauses = AbstractTranslator.to_tria!(abstract, env: empty_env(module))
         {:fn, [], clauses}
@@ -231,7 +233,7 @@ defmodule Tria.Language.Beam do
   @spec tria_bodies(abstract_code(), MFArity.mfarity()) :: [Tria.t()] | nil
   def tria_bodies(abstract_code, mfarity) do
     with {:fn, _, clauses} <- tria(abstract_code, mfarity) do
-      Enum.map(clauses, fn {:"->", _, [_, body]} -> body end)
+      Enum.map(clauses, fn {:->, _, [_, body]} -> body end)
     end
   end
 
@@ -239,7 +241,8 @@ defmodule Tria.Language.Beam do
   Fetches abstract_code for mfa
   """
   @spec abstract(abstract_code(), atom(), arity()) :: abstract_code() | nil
-  def abstract(abstract_code, name, arity) when is_atom(name) and is_integer(arity) and arity >= 0 do
+  def abstract(abstract_code, name, arity)
+      when is_atom(name) and is_integer(arity) and arity >= 0 do
     Enum.find_value(abstract_code, fn
       {:function, _anno, ^name, ^arity, clauses} -> clauses
       _ -> false
@@ -253,9 +256,11 @@ defmodule Tria.Language.Beam do
   def functions([{:function, _anno, name, arity, _clauses} | tail]) do
     [{name, arity} | functions(tail)]
   end
+
   def functions([_ | tail]) do
     functions(tail)
   end
+
   def functions([]), do: []
 
   ### Functions for debugging
@@ -268,8 +273,10 @@ defmodule Tria.Language.Beam do
     {^module, bin, _filename} = :code.get_object_code(module)
     inspect_fn(bin, name)
   end
+
   def inspect_fn(object_code, name) when is_binary(object_code) do
     {:ok, {_, [{_, {_, ac}}]}} = :beam_lib.chunks(object_code, [:abstract_code])
+
     for {:function, _, ^name, _, clauses} <- ac do
       inspect_ast({:fn, [], AbstractTranslator.to_tria!(clauses, __ENV__)}, with_contexts: true)
     end
@@ -285,10 +292,15 @@ defmodule Tria.Language.Beam do
     {^module, bin, _filename} = :code.get_object_code(module)
     inspect_fn(bin)
   end
+
   def inspect_fn(object_code) when is_binary(object_code) do
     {:ok, {_, [{_, {_, ac}}]}} = :beam_lib.chunks(object_code, [:abstract_code])
+
     for {:function, _, name, _, clauses} <- ac do
-      inspect_ast({:fn, [], AbstractTranslator.to_tria!(clauses, __ENV__)}, with_contexts: true, label: name)
+      inspect_ast({:fn, [], AbstractTranslator.to_tria!(clauses, __ENV__)},
+        with_contexts: true,
+        label: name
+      )
     end
 
     :ok
@@ -304,17 +316,18 @@ defmodule Tria.Language.Beam do
   rescue
     ArgumentError ->
       module = module(binary)
-      Debug.puts "Non BERT docs format for #{module}, continuing without docs"
+      Debug.puts("Non BERT docs format for #{module}, continuing without docs")
       {nil, %{}}
 
     MatchError ->
       module = module(binary)
-      Debug.puts "Failed to fetch docs chunk for #{module}, continuing without docs"
+      Debug.puts("Failed to fetch docs chunk for #{module}, continuing without docs")
       {nil, %{}}
   else
     {:docs_v1, _, :elixir, "text/markdown", maybe_moduledoc, _, docs} ->
       function_docs =
-        for {{k, name, arity}, _, _, %{"en" => doc}, _} when k in ~w[macro function]a <- docs, into: %{} do
+        for {{k, name, arity}, _, _, %{"en" => doc}, _} when k in ~w[macro function]a <- docs,
+            into: %{} do
           {{name, arity}, doc}
         end
 
@@ -328,7 +341,11 @@ defmodule Tria.Language.Beam do
 
     docs ->
       module = module(binary)
-      Debug.puts "Unexpected docs format for #{module}, #{inspect docs}, continuing without docs"
+
+      Debug.puts(
+        "Unexpected docs format for #{module}, #{inspect(docs)}, continuing without docs"
+      )
+
       {nil, %{}}
   end
 
@@ -338,5 +355,4 @@ defmodule Tria.Language.Beam do
       :ets.new(__MODULE__, [:set, :named_table, :public])
     end
   end
-
 end

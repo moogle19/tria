@@ -14,8 +14,8 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
   @tri_opts to_tria: false, meta: false
 
   @xxx :"Elixir.Tria.Compiler.ElixirTranslatorTest.X.X.X"
-  @xx  :"Elixir.Tria.Compiler.ElixirTranslatorTest.X.X"
-  @x   :"Elixir.Tria.Compiler.ElixirTranslatorTest.X"
+  @xx :"Elixir.Tria.Compiler.ElixirTranslatorTest.X.X"
+  @x :"Elixir.Tria.Compiler.ElixirTranslatorTest.X"
 
   describe "Imports" do
     test "simple" do
@@ -30,9 +30,9 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
       )
 
       assert_tri translated do
-          :"Elixir.Tria.Compiler.ElixirTranslatorTest.Example"
-          tri({:., _, [:"Elixir.Tria.Compiler.ElixirTranslatorTest.Example", :f]}, _, [1])
-          f(1, 2, 3)
+        :"Elixir.Tria.Compiler.ElixirTranslatorTest.Example"
+        tri({:., _, [:"Elixir.Tria.Compiler.ElixirTranslatorTest.Example", :f]}, _, [1])
+        f(1, 2, 3)
       end
     end
 
@@ -293,7 +293,7 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
     test "just works" do
       translated =
         tri do
-          Enum.map(list, & &1 + 1)
+          Enum.map(list, &(&1 + 1))
         end
         |> ElixirTranslator.to_tria!(__ENV__)
 
@@ -319,7 +319,7 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
         end
       end
 
-      assert 3 == length Enum.uniq [combination, first, second]
+      assert 3 == length(Enum.uniq([combination, first, second]))
     end
   end
 
@@ -345,12 +345,14 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
       # end
 
       assert {:try, _,
-       [
-         [
-           do: raising,
-           rescue: [{:->, _, [[{:in, _, [error, {:__aliases__, _, [:ArgumentError]}]}], error]}]
-         ]
-       ]} = translated
+              [
+                [
+                  do: raising,
+                  rescue: [
+                    {:->, _, [[{:in, _, [error, {:__aliases__, _, [:ArgumentError]}]}], error]}
+                  ]
+                ]
+              ]} = translated
 
       assert raising != error
     end
@@ -377,6 +379,7 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
       # Without recuse because waiting for 1.16
       quote do
         x = 1
+
         try do
           x = 2
           raising
@@ -384,10 +387,13 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
           2 -> x
           x -> x
         catch
-          3 -> x
-          x -> x
-        # rescue
-        #   x in Error -> x
+          3 ->
+            x
+
+          x ->
+            x
+            # rescue
+            #   x in Error -> x
         after
           x
         end
@@ -395,6 +401,7 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
         x = 1
+
         try do
           x = 2
           _raising
@@ -402,10 +409,13 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
           2 -> x
           x -> x
         catch
-          3 -> x
-          x -> x
-        # rescue
-        #   x in Error -> x
+          3 ->
+            x
+
+          x ->
+            x
+            # rescue
+            #   x in Error -> x
         after
           x
         end
@@ -421,35 +431,39 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
       |> ElixirTranslator.to_tria!(__ENV__)
       |> assert_tri do
         # TODO think of better assertion
-        %{tri_splicing _}
+        %{tri_splicing(_)}
       end
     end
   end
 
   describe "from_tria/2" do
     test "Variable" do
-      assert {:var, [counter: 123, line: 1], nil} == ElixirTranslator.from_tria({:var, [line: 1], 123})
+      assert {:var, [counter: 123, line: 1], nil} ==
+               ElixirTranslator.from_tria({:var, [line: 1], 123})
     end
 
     test "Receive" do
       tri do
         receive do
           x -> x
-          after 10 -> 10
+        after
+          10 -> 10
         end
       end
       |> ElixirTranslator.to_tria!()
       |> assert_tri do
         receive do
           x -> x
-          after {10, 10}
+        after
+          {10, 10}
         end
       end
       |> ElixirTranslator.from_tria()
       |> assert_tri do
         receive do
           x -> x
-          after 10 -> 10
+        after
+          10 -> 10
         end
       end
     end
@@ -477,9 +491,7 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
           _, _ when _ -> _
           _, _ when _ -> _
           _, _ when _ -> _
-
           _, _ -> _
-
           _, _ -> _
           _, _ -> _
           _, _ -> _
@@ -516,13 +528,13 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
       |> assert_tri do
         defmodule _ do
           def f(x) do
-            tri env
+            tri(env)
           end
         end
       end
 
       {_, _, attrs} = env
-      env = Map.new attrs
+      env = Map.new(attrs)
       assert %{module: XYZ, function: {:f, 1}} = env
     end
 
@@ -541,16 +553,15 @@ defmodule Tria.Compiler.ElixirTranslatorTest do
         defmodule _ do
           defmodule _ do
             def f do
-              tri env
+              tri(env)
             end
           end
         end
       end
 
       {_, _, attrs} = env
-      env = Map.new attrs
+      env = Map.new(attrs)
       assert %{module: XXX.YYY, function: {:f, 0}} = env
     end
   end
-
 end

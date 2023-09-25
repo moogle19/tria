@@ -1,5 +1,4 @@
 defmodule Tria.Compiler.AbstractTranslatorTest do
-
   use ExUnit.Case, async: true
 
   alias Tria.Compiler.AbstractTranslator
@@ -106,7 +105,7 @@ defmodule Tria.Compiler.AbstractTranslatorTest do
 
       [{_, binary}] =
         quote do
-          defmodule unquote :"X_#{:erlang.unique_integer [:positive]}" do
+          defmodule unquote(:"X_#{:erlang.unique_integer([:positive])}") do
             @compile :debug_info
             def f(x, f \\ &to_string/1) do
               f.(x)
@@ -126,7 +125,7 @@ defmodule Tria.Compiler.AbstractTranslatorTest do
         f(x, fn y -> _ end)
       end
 
-      assert not is_pinned y
+      assert not is_pinned(y)
       assert x != y
     end
   end
@@ -148,13 +147,13 @@ defmodule Tria.Compiler.AbstractTranslatorTest do
         end
       end
 
-      assert_unique [underscore_1, underscore_2]
+      assert_unique([underscore_1, underscore_2])
     end
 
     test "Elixir" do
       abstract do
         case 1 do
-          _ when 1 > 2 and 3 + 4 < length([1, 2, 3 | 4]) or tuple_size({1, 2, 3}) > 1 ->
+          _ when (1 > 2 and 3 + 4 < length([1, 2, 3 | 4])) or tuple_size({1, 2, 3}) > 1 ->
             :ok
         end
       end
@@ -163,7 +162,10 @@ defmodule Tria.Compiler.AbstractTranslatorTest do
         case 1 do
           _
           when :erlang.orelse(
-                 :erlang.andalso(Kernel.>(1, 2), Kernel.<(Kernel.+(3, 4), :erlang.length([1, 2, 3 | 4]))),
+                 :erlang.andalso(
+                   Kernel.>(1, 2),
+                   Kernel.<(Kernel.+(3, 4), :erlang.length([1, 2, 3 | 4]))
+                 ),
                  Kernel.>(:erlang.tuple_size({1, 2, 3}), 1)
                ) ->
             :ok
@@ -177,7 +179,7 @@ defmodule Tria.Compiler.AbstractTranslatorTest do
       abstract do
         fn type, constraint ->
           fn match ->
-            case {type, constraint,  match} do
+            case {type, constraint, match} do
               {^type, ^constraint, :exact} -> true
               {^type, cc, :suffix} -> String.ends_with?(constraint, cc)
               {^type, cc, :prefix} -> String.starts_with?(constraint, cc)

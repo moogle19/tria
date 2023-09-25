@@ -1,5 +1,4 @@
 defmodule Tria.Compiler.Translator do
-
   @moduledoc """
   Behaviour for translators. Translator is basically a thing
   which translates one AST form to another.
@@ -63,7 +62,6 @@ defmodule Tria.Compiler.Translator do
     to_tria!: 1,
     to_tria!: 2,
     from_tria!: 1,
-    from_tria!: 2,
+    from_tria!: 2
   ]
-
 end

@@ -1,5 +1,4 @@
 defmodule Tria.Debug.Tracer do
-
   @moduledoc """
   Dead simple module which leverages `:persistent_term` to
   trace changes of functions during compilation.
@@ -50,17 +49,18 @@ defmodule Tria.Debug.Tracer do
   """
   def with_local_trace(key, func) do
     old = Process.put(:local_trace, key)
+
     pid =
-      spawn fn ->
-        Process.sleep :timer.seconds 5
+      spawn(fn ->
+        Process.sleep(:timer.seconds(5))
         MFArity.inspect(key, label: :takes_too_long)
-      end
+      end)
 
     try do
       func.()
     after
       Process.exit(pid, :kill)
-      old && Process.put(:local_trace, old) || Process.delete(:local_trace)
+      (old && Process.put(:local_trace, old)) || Process.delete(:local_trace)
     end
   end
 
@@ -79,7 +79,7 @@ defmodule Tria.Debug.Tracer do
     |> parse_trace_ast()
   rescue
     exception in [TokenMissingError, SyntaxError] ->
-      IO.warn "Tracing string syntax is incorrect"
+      IO.warn("Tracing string syntax is incorrect")
       reraise exception, __STACKTRACE__
   end
 
@@ -94,18 +94,20 @@ defmodule Tria.Debug.Tracer do
   @spec parse_trace_ast([Macro.t()]) :: [MFArity.mfarity()]
   def parse_trace_ast(ast) when is_list(ast) do
     Enum.map(ast, fn
-      {:/, _, [{{:".", _, [{:__aliases__, _, aliases}, function]}, _, _}, arity]}
+      {:/, _, [{{:., _, [{:__aliases__, _, aliases}, function]}, _, _}, arity]}
       when is_integer(arity) and is_atom(function) ->
         {Module.concat(aliases), function, arity}
     end)
   end
+
   def parse_trace_ast(arg) do
-    raise ArgumentError, "Expected a list of signatures, got #{inspect arg}"
+    raise ArgumentError, "Expected a list of signatures, got #{inspect(arg)}"
   end
 
   defp do_trace({module, _kind, function, arity}, data, inspector, label) do
     do_trace({module, function, arity}, data, inspector, label)
   end
+
   defp do_trace(fname, data, inspector, label) when is_atom(fname) do
     case :persistent_term.get({__MODULE__, fname}, nil) do
       %{mfarity: mfarity, only: labels} ->
@@ -122,6 +124,7 @@ defmodule Tria.Debug.Tracer do
         nil
     end
   end
+
   defp do_trace(mfarity, data, inspector, label) do
     with %{only: labels} <- :persistent_term.get({__MODULE__, mfarity}, nil) do
       if right_label?(label, labels) do
@@ -134,10 +137,10 @@ defmodule Tria.Debug.Tracer do
   defp right_label?(label, labels), do: label in labels
 
   defp print(label, keystr, inspector, data) do
-    IO.puts """
+    IO.puts("""
 
     #{label}: #{keystr}
     #{inspector.(data)}
-    """
+    """)
   end
 end

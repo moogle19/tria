@@ -1,5 +1,4 @@
 defmodule Tria.Optimizer.Pass do
-
   @moduledoc """
   A `Pass` is a module which optimization logic.
   Most of the passes can be run several times and this module decouples this logic.
@@ -48,9 +47,11 @@ defmodule Tria.Optimizer.Pass do
       end
     after
       Process.cancel_timer(timer)
+
       receive do
         :stop -> :ok
-        after 0 -> :ok
+      after
+        0 -> :ok
       end
     end
   end
@@ -58,7 +59,8 @@ defmodule Tria.Optimizer.Pass do
   defp run_once(pass, state, opts) do
     receive do
       :stop -> state
-      after 0 ->
+    after
+      0 ->
         case pass.run_once(state, opts) do
           {:error, :nothing_to_optimize} ->
             state
@@ -81,5 +83,4 @@ defmodule Tria.Optimizer.Pass do
       defoverridable run_while: 2, run_while: 1
     end
   end
-
 end

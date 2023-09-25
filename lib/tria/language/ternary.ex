@@ -13,7 +13,7 @@ defmodule Tria.Language.Ternary do
       __CALLER__.functions
       |> Keyword.get(Kernel, [])
       |> Kernel.++(Keyword.get(__CALLER__.macros, Kernel, []))
-      |> Keyword.delete(:"&&")
+      |> Keyword.delete(:&&)
 
     quote do
       import Kernel, only: unquote(imports)
@@ -35,5 +35,4 @@ defmodule Tria.Language.Ternary do
   def greater?(:yes, _), do: true
   def greater?(:maybe, :no), do: true
   def greater?(_, _), do: false
-
 end

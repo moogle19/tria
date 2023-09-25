@@ -1,5 +1,4 @@
 defmodule Tria.Language.Tri do
-
   @moduledoc """
   Module for famous `tri/2` macro. This macro is used mostly for testing the optimized code
 
@@ -24,11 +23,12 @@ defmodule Tria.Language.Tri do
   - `:isolate` — defines that the variables should not be fetches from outer context (default: `false`)
   - `:meta` — whether meta field should be empty in pattern or in AST
   """
-  @type option :: {:debug, atom()}
-  | {:to_tria, :force | true | false}
-  | {:to_ssa, boolean()}
-  | {:isolate, boolean()}
-  | {:meta, boolean()}
+  @type option ::
+          {:debug, atom()}
+          | {:to_tria, :force | true | false}
+          | {:to_ssa, boolean()}
+          | {:isolate, boolean()}
+          | {:meta, boolean()}
 
   @doc """
   `quote/unquote` but on steroids
@@ -61,15 +61,18 @@ defmodule Tria.Language.Tri do
   """
   @spec tri([option()], Macro.input()) :: Macro.output()
   defmacro tri(opts \\ [], block)
+
   defmacro tri(opts, do: code) do
     do_tri(code, opts, __CALLER__)
   end
+
   defmacro tri(opts, code) do
     do_tri(code, opts, __CALLER__)
   end
 
   def do_tri(code, opts, env) do
     opts = get_defaults(opts, env)
+
     if Macro.Env.in_match?(env) do
       to_pattern(code, opts, env)
     else
@@ -112,7 +115,7 @@ defmodule Tria.Language.Tri do
       unless opts[:isolate] do
         # opts[:debug] && IO.inspect versioned_vars, label: :versioned_vars
         # opts[:debug] && IO.inspect x, label: :x
-        prewalk(x, & maybe_unescape_variable(&1, versioned_vars))
+        prewalk(x, &maybe_unescape_variable(&1, versioned_vars))
       else
         x
       end
@@ -122,7 +125,7 @@ defmodule Tria.Language.Tri do
         x
       else
         prewalk(x, fn
-          {:"{}", [], [op, _meta, args]} -> {:"{}", [], [op, [], args]}
+          {:{}, [], [op, _meta, args]} -> {:{}, [], [op, [], args]}
           other -> other
         end)
       end
@@ -132,8 +135,9 @@ defmodule Tria.Language.Tri do
   defp maybe_translate(code, env, opts) do
     if Keyword.get(opts, :to_tria, true) do
       tria = ElixirTranslator.to_tria!(code, env)
+
       if Keyword.get(opts, :to_ssa, true) do
-        SSATranslator.from_tria! tria
+        SSATranslator.from_tria!(tria)
       else
         tria
       end
@@ -161,6 +165,7 @@ defmodule Tria.Language.Tri do
   defp traverse({:{}, _, [:tri, _, [literal]]}, env) do
     traverse_in_tri(literal, env)
   end
+
   defp traverse({:{}, _, [:tri, _, [n, m, a]]}, env) do
     {:{}, [], [traverse_in_tri(n, env), traverse_in_tri(m, env), traverse_in_tri(a, env)]}
   end
@@ -179,12 +184,15 @@ defmodule Tria.Language.Tri do
         [{:|, [], [head, tail]}]
     end
   end
+
   defp traverse({l, r}, env) do
     {traverse(l, env), traverse(r, env)}
   end
+
   defp traverse({:{}, _, [n, _, a]}, env) do
     {:{}, [], [traverse(n, env), metavar(), traverse(a, env)]}
   end
+
   defp traverse(other, _env), do: other
 
   ## Traversion for quoted inside `tri/1` and `tri/3`
@@ -193,12 +201,15 @@ defmodule Tria.Language.Tri do
   defp traverse_in_tri(escaped, env) when is_list(escaped) do
     Enum.map(escaped, &traverse_in_tri(&1, env))
   end
+
   defp traverse_in_tri({l, r}, env) do
     {traverse_in_tri(l, env), traverse_in_tri(r, env)}
   end
+
   defp traverse_in_tri({:{}, _, [n, _, a]}, env) do
     Macro.expand({traverse_in_tri(n, env), [], traverse_in_tri(a, env)}, env)
   end
+
   defp traverse_in_tri(other, _env), do: other
 
   ## Unescapes variables
@@ -206,11 +217,14 @@ defmodule Tria.Language.Tri do
   defp maybe_unescape_variable({:{}, _, [n, m, c]}) when is_variable({n, m, c}) do
     {n, m, c}
   end
+
   defp maybe_unescape_variable(other), do: other
 
-  defp maybe_unescape_variable({:{}, _, [n, m, c]} = original, versioned_vars) when is_variable({n, m, c}) do
+  defp maybe_unescape_variable({:{}, _, [n, m, c]} = original, versioned_vars)
+       when is_variable({n, m, c}) do
     name_context = {n, c}
     name_nil = {n, nil}
+
     case versioned_vars do
       %{^name_context => _} ->
         {n, m, c}
@@ -222,6 +236,7 @@ defmodule Tria.Language.Tri do
         original
     end
   end
+
   defp maybe_unescape_variable(other, _), do: other
 
   ## Other helpers
@@ -231,8 +246,8 @@ defmodule Tria.Language.Tri do
   end
 
   defp get_defaults(opts, %Macro.Env{module: nil}), do: opts
+
   defp get_defaults(opts, %Macro.Env{module: module}) do
     opts ++ Module.get_attribute(module, :tri_opts, [])
   end
-
 end

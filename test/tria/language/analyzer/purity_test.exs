@@ -21,5 +21,4 @@ defmodule Tria.Language.Analyzer.PurityTest do
       |> refute()
     end
   end
-
 end

@@ -1,5 +1,4 @@
 defmodule Tria.Language.Bindmap do
-
   @moduledoc """
   Utility structure for working with bindings map
   """
@@ -47,12 +46,16 @@ defmodule Tria.Language.Bindmap do
 
   def merge!(left, right) do
     Map.merge(left, right, fn
-      _, v, v -> v
+      _, v, v ->
+        v
+
       k, l, r ->
         if unmeta(l) != unmeta(r) do
-          raise ArgumentError, message: "Bindmaps have a conflicting key"
-          <> " #{inspect k, pretty: true}"
-          <> " with #{ast_to_string l} vs #{ast_to_string r}"
+          raise ArgumentError,
+            message:
+              "Bindmaps have a conflicting key" <>
+                " #{inspect(k, pretty: true)}" <>
+                " with #{ast_to_string(l)} vs #{ast_to_string(r)}"
         else
           l
         end
@@ -61,7 +64,7 @@ defmodule Tria.Language.Bindmap do
 
   @spec fetch(t(), key()) :: {:ok, value()} | :error
   def fetch(bindmap, key) do
-    Map.fetch(bindmap, unmeta key)
+    Map.fetch(bindmap, unmeta(key))
   end
 
   @spec fetch_unfolded(t(), key(), Keyword.t()) :: {:ok, value()} | :error
@@ -87,55 +90,63 @@ defmodule Tria.Language.Bindmap do
 
   @spec unfold(Tria.t(), t(), [unfold_option()]) :: Tria.t()
   def unfold(value, bindmap, opts \\ [])
+
   def unfold(value, bindmap, while: predicate) do
     unfold_while(value, bindmap, predicate)
   end
+
   def unfold(value, bindmap, opts) do
-    context_prewalk(value, fn
-      ast, nil ->
-        Map.get(bindmap, ast, ast)
+    context_prewalk(
+      value,
+      fn
+        ast, nil ->
+          Map.get(bindmap, ast, ast)
 
-      ast, :guard ->
-        new = Map.get(bindmap, ast, ast)
-        if is_guard(new) do
-          new
-        else
-          ast
-        end
+        ast, :guard ->
+          new = Map.get(bindmap, ast, ast)
 
-      pin(ast), :match ->
-        case fetch(bindmap, ast) do
-          {:ok, new} ->
-            cond do
-              findwalk(new, &match?({:%{}, _, _}, &1)) ->
-                ast
-
-              quoted_literal?(new) ->
-                new
-
-              vared_literal?(new) ->
-                postwalk(new, fn
-                  v when is_variable(v) -> pin(v)
-                  other -> other
-                end)
-
-              true ->
-                ast
-            end
-
-          :error ->
+          if is_guard(new) do
+            new
+          else
             ast
-        end
+          end
 
-      other, :match ->
-        other
-    end, opts[:context])
+        pin(ast), :match ->
+          case fetch(bindmap, ast) do
+            {:ok, new} ->
+              cond do
+                findwalk(new, &match?({:%{}, _, _}, &1)) ->
+                  ast
+
+                quoted_literal?(new) ->
+                  new
+
+                vared_literal?(new) ->
+                  postwalk(new, fn
+                    v when is_variable(v) -> pin(v)
+                    other -> other
+                  end)
+
+                true ->
+                  ast
+              end
+
+            :error ->
+              ast
+          end
+
+        other, :match ->
+          other
+      end,
+      opts[:context]
+    )
   end
 
   @spec unfold_while(Tria.t(), t(), predicate()) :: Tria.t()
   def unfold_while(value, bindmap, predicate) do
     f = fn x -> unfold_while(x, bindmap, predicate) end
     unfolded = Map.get(bindmap, unmeta(value), value)
+
     case predicate.(unfolded) do
       :cont ->
         case unfolded do
@@ -171,5 +182,4 @@ defmodule Tria.Language.Bindmap do
         value
     end
   end
-
 end

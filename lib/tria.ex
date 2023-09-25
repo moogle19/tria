@@ -1,5 +1,4 @@
 defmodule Tria do
-
   @moduledoc """
   Optimizing transpiler for Elixir language.
   """
@@ -11,13 +10,14 @@ defmodule Tria do
   The only incompatible difference here is that Tria supports having integer instead of context
   in the ast for variables. This is very handy for SSA transformations and stuff.
   """
-  @type t :: expression
-  | variable
-  | {t, t}
-  | [t]
-  | atom
-  | number
-  | binary
+  @type t ::
+          expression
+          | variable
+          | {t, t}
+          | [t]
+          | atom
+          | number
+          | binary
 
   @type expression :: {expression | atom, meta, [t]}
 
@@ -34,11 +34,11 @@ defmodule Tria do
   end
 
   def version do
-    unquote(Mix.Project.config()[:version])
-    <> "-"
-    <> System.version()
-    <> "-"
-    <> List.to_string(:erlang.system_info(:otp_release))
+    unquote(Mix.Project.config()[:version]) <>
+      "-" <>
+      System.version() <>
+      "-" <>
+      List.to_string(:erlang.system_info(:otp_release))
   end
 
   # Public interface
@@ -59,5 +59,4 @@ defmodule Tria do
     |> Tria.Optimizer.run()
     |> ElixirTranslator.from_tria()
   end
-
 end

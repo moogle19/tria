@@ -1,5 +1,4 @@
 defmodule Tria.TestHelpers do
-
   @moduledoc """
   A bunch of helpers for testing
   """
@@ -8,14 +7,15 @@ defmodule Tria.TestHelpers do
   require Tria.Language.Tri, as: Tri
 
   def last_line({:__block__, _, lines}) do
-    last_line List.last lines
+    last_line(List.last(lines))
   end
+
   def last_line(other), do: other
 
   defmacro assert_unique(list) do
     quote bind_quoted: [list: list] do
-      len = length list
-      assert len == length Enum.uniq list
+      len = length(list)
+      assert len == length(Enum.uniq(list))
     end
   end
 
@@ -24,7 +24,7 @@ defmodule Tria.TestHelpers do
       code
       |> Tri.do_tri(opts, %{__CALLER__ | context: :match})
       |> prewalk(fn
-        #https://github.com/elixir-lang/elixir/issues/12296
+        # https://github.com/elixir-lang/elixir/issues/12296
         {:{}, _, [:__block__, _, [line]]} -> line
         {:{}, _, [:__aliases__, _, modules]} -> Module.concat(modules)
         other -> other
@@ -33,12 +33,13 @@ defmodule Tria.TestHelpers do
     quote do
       assert unquote(pattern) = unquote(arg)
     end
-    |> Macro.prewalk(fn x -> Macro.update_meta(x, & [{:generated, true} | &1]) end)
+    |> Macro.prewalk(fn x -> Macro.update_meta(x, &[{:generated, true} | &1]) end)
   end
 
   defmacro abstract(vars \\ [], do: body) do
     vars = Enum.map(vars, fn {name, meta, _} -> {name, meta, nil} end)
-    name = :"Tria.Temp#{:erlang.unique_integer [:positive]}"
+    name = :"Tria.Temp#{:erlang.unique_integer([:positive])}"
+
     quoted =
       quote do
         defmodule unquote(name) do
@@ -57,7 +58,7 @@ defmodule Tria.TestHelpers do
     {:ok, abstract_code} = Tria.Language.Beam.abstract_code(binary)
 
     Enum.find_value(abstract_code, fn
-      {:function, _, :f, _, [{:clause, _, _, _, body}]} -> Macro.escape body
+      {:function, _, :f, _, [{:clause, _, _, _, body}]} -> Macro.escape(body)
       _ -> false
     end)
   end

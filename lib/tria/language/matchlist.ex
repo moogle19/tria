@@ -1,5 +1,4 @@
 defmodule Tria.Language.Matchlist do
-
   @moduledoc """
   Structure for working with a set of matches.
   This set of matches is trying to be conflict free
@@ -23,21 +22,21 @@ defmodule Tria.Language.Matchlist do
   @doc """
   Checks if this is an ast for map
   """
-  defguard is_map_ast(mapast) when
-    is_tuple(mapast) and tuple_size(mapast) == 3 and
-    :erlang.element(1, mapast) == :"%{}"
+  defguard is_map_ast(mapast)
+           when is_tuple(mapast) and tuple_size(mapast) == 3 and
+                  :erlang.element(1, mapast) == :%{}
 
   @doc """
   Checks if the specified match is a map_match
   """
-  defguard is_map_match(match) when
-    is_tuple(match) and tuple_size(match) == 2 and
-    is_map_ast(:erlang.element(1, match)) and
-    is_map_ast(:erlang.element(2, match))
+  defguard is_map_match(match)
+           when is_tuple(match) and tuple_size(match) == 2 and
+                  is_map_ast(:erlang.element(1, match)) and
+                  is_map_ast(:erlang.element(2, match))
 
-  defguard is_map_match(left, right) when
-    is_map_ast(left) and
-    is_map_ast(right)
+  defguard is_map_match(left, right)
+           when is_map_ast(left) and
+                  is_map_ast(right)
 
   defguard is_empty(matchlist) when matchlist == []
 
@@ -60,6 +59,7 @@ defmodule Tria.Language.Matchlist do
   """
   @spec fetch(t(), Tria.t()) :: {:ok, ast()} | :error
   def fetch([], _), do: :error
+
   def fetch([{key, value} | tail], target) do
     if compare(key, target), do: {:ok, value}, else: fetch(tail, target)
   end
@@ -70,6 +70,7 @@ defmodule Tria.Language.Matchlist do
   @spec get(t(), ast(), ast()) :: ast()
   def get(matchlist, key, default \\ nil)
   def get([], _, default), do: default
+
   def get([{key, value} | tail], target, default) do
     if compare(key, target), do: value, else: get(tail, target, default)
   end
@@ -87,10 +88,12 @@ defmodule Tria.Language.Matchlist do
   """
   @spec to_binds(t(), list()) :: [Tria.t()]
   def to_binds(matchlist, acc \\ [])
+
   def to_binds([{key, value} | tail], acc) do
     bind = quote do: unquote(key) = unquote(value)
     to_binds(tail, [bind | acc])
   end
+
   def to_binds([], acc), do: acc
 
   @doc """
@@ -98,7 +101,7 @@ defmodule Tria.Language.Matchlist do
   """
   @spec to_quoted(t()) :: Tria.t()
   def to_quoted(matchlist) do
-    {:__block__, [], to_binds matchlist}
+    {:__block__, [], to_binds(matchlist)}
   end
 
   @doc """
@@ -139,11 +142,11 @@ defmodule Tria.Language.Matchlist do
   """
   @spec inspect_diff(t(), t(), Keyword.t()) :: :ok
   def inspect_diff(was, became, opts \\ []) do
-    IO.puts "#{opts[:label] || "Diff"}:"
+    IO.puts("#{opts[:label] || "Diff"}:")
 
     was
     |> List.myers_difference(became)
-    |> tap(& match?([], &1) && IO.puts("empty"))
+    |> tap(&(match?([], &1) && IO.puts("empty")))
     |> Enum.each(fn
       {:eq, _} ->
         nil
@@ -161,14 +164,16 @@ defmodule Tria.Language.Matchlist do
   defp compare([lh | lt], [rh | rt]) do
     compare(lh, rh) && compare(lt, rt)
   end
+
   defp compare({ll, lr}, {rl, rr}) do
     compare(ll, rl) && compare(lr, rr)
   end
-  defp compare({:"%{}", _, l}, {:"%{}", _, r}) do
+
+  defp compare({:%{}, _, l}, {:%{}, _, r}) do
     compare(Enum.sort(l), Enum.sort(r))
   end
+
   defp compare({op, _, l}, {op, _, r}), do: compare(l, r)
   defp compare(same, same), do: true
   defp compare(_, _), do: false
-
 end

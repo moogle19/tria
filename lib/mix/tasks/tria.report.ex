@@ -47,21 +47,21 @@ defmodule Mix.Tasks.Tria.Report do
 
     ### Versions
 
-    * System info: `#{safe inspect :os.type()} #{safe inspect :os.version()}`
-    * Erlang: `#{safe List.to_string :erlang.system_info :system_version}`
-    * Elixir: `#{safe System.version()}`
+    * System info: `#{safe(inspect(:os.type()))} #{safe(inspect(:os.version()))}`
+    * Erlang: `#{safe(List.to_string(:erlang.system_info(:system_version)))}`
+    * Elixir: `#{safe(System.version())}`
     * Tria: `#{Tria.version()}`
 
     ### Configuration
 
-    * compilers: `#{safe inspect Mix.Project.config()[:compilers]}`
-    * protocol consolidation: `#{safe inspect Mix.Project.config()[:consolidate_protocols]}`
-    * tria app env: `#{safe inspect Application.get_all_env(:tria)}`
+    * compilers: `#{safe(inspect(Mix.Project.config()[:compilers]))}`
+    * protocol consolidation: `#{safe(inspect(Mix.Project.config()[:consolidate_protocols]))}`
+    * tria app env: `#{safe(inspect(Application.get_all_env(:tria)))}`
 
     ### System environment
 
     ```
-    #{safe system_env()}
+    #{safe(system_env())}
     ```
 
     ## Expected behaiour

@@ -23,7 +23,7 @@ defmodule Tria.Language.Analyzer.SafetyTest do
 
     test "unsafe throw" do
       tri do
-        throw :oops
+        throw(:oops)
       end
       |> analyze()
       |> refute()
@@ -39,7 +39,7 @@ defmodule Tria.Language.Analyzer.SafetyTest do
 
     test "unsafe math" do
       tri do
-        :math.sqrt x
+        :math.sqrt(x)
       end
       |> analyze()
       |> refute()
@@ -48,7 +48,7 @@ defmodule Tria.Language.Analyzer.SafetyTest do
     test "unsafe case" do
       tri do
         case x do
-          true -> throw :oops
+          true -> throw(:oops)
           _ -> nil
         end
       end
@@ -61,33 +61,33 @@ defmodule Tria.Language.Analyzer.SafetyTest do
     test "well" do
       tri do
         case (case highlight_84675 do
-               underscore_84771
-               when :erlang.orelse(
-                      Kernel.===(underscore_84771, false),
-                      Kernel.===(underscore_84771, nil)
-                    ) ->
-                 nil
+                underscore_84771
+                when :erlang.orelse(
+                       Kernel.===(underscore_84771, false),
+                       Kernel.===(underscore_84771, nil)
+                     ) ->
+                  nil
 
-               _ ->
-                 <<45, 104, 105, 103, 104, 108, 105, 103, 104, 116>>
-             end) do
-         underscore_84835 when :erlang.is_binary(underscore_84835) ->
-           underscore_84835
+                _ ->
+                  <<45, 104, 105, 103, 104, 108, 105, 103, 104, 116>>
+              end) do
+          underscore_84835 when :erlang.is_binary(underscore_84835) ->
+            underscore_84835
 
-         underscore_84867 ->
-           String.Chars.to_string(
-             case highlight_84675 do
-               underscore_84771
-               when :erlang.orelse(
-                      Kernel.===(underscore_84771, false),
-                      Kernel.===(underscore_84771, nil)
-                    ) ->
-                 nil
+          underscore_84867 ->
+            String.Chars.to_string(
+              case highlight_84675 do
+                underscore_84771
+                when :erlang.orelse(
+                       Kernel.===(underscore_84771, false),
+                       Kernel.===(underscore_84771, nil)
+                     ) ->
+                  nil
 
-               _ ->
-                 <<45, 104, 105, 103, 104, 108, 105, 103, 104, 116>>
-             end
-           )
+                _ ->
+                  <<45, 104, 105, 103, 104, 108, 105, 103, 104, 116>>
+              end
+            )
         end
       end
       |> analyze()

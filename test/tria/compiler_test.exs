@@ -1,5 +1,4 @@
 defmodule Tria.CompilerTest do
-
   use ExUnit.Case, async: true
 
   alias Tria.Compiler
@@ -30,7 +29,7 @@ defmodule Tria.CompilerTest do
           def size(x), do: byte_size(x)
 
           def f(string, l) do
-            <<x :: size(l), _ :: binary>> = string
+            <<x::size(l), _::binary>> = string
             x
           end
         end
@@ -57,7 +56,7 @@ defmodule Tria.CompilerTest do
 
       Compiler.recompile_from_beam(module, beam, %{context: context, file: __ENV__.file})
 
-      assert true  == FunctionRepo.lookup({C, :f, 1}, :safe_cache)
+      assert true == FunctionRepo.lookup({C, :f, 1}, :safe_cache)
       assert false == FunctionRepo.lookup({C, :f, 1}, :optimize)
       assert false == FunctionRepo.lookup({C, :g, 1}, :safe_cache)
     end
@@ -82,5 +81,4 @@ defmodule Tria.CompilerTest do
       end
     end
   end
-
 end

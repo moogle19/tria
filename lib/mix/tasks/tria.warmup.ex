@@ -46,7 +46,7 @@ defmodule Mix.Tasks.Tria.Warmup do
   alias Tria.Language.Analyzer.Purity
 
   def run(args) when is_list(args) do
-    run parse_args args
+    run(parse_args(args))
   end
 
   def run(%{from: :loaded}) do
@@ -62,7 +62,7 @@ defmodule Mix.Tasks.Tria.Warmup do
   end
 
   def check(modules) do
-    length = length modules
+    length = length(modules)
 
     Enum.reduce(modules, 1, fn module, index ->
       with(
@@ -77,11 +77,12 @@ defmodule Mix.Tasks.Tria.Warmup do
           Purity.check_analyze_mfarity({module, function, arity})
           now = now()
           difference = now - ts
+
           if difference > 1000 do
-            IO.write [
+            IO.write([
               IO.ANSI.clear_line(),
-              "\r#{inspect module}.#{function}/#{arity} took #{difference}ms to analyze!\n"
-            ]
+              "\r#{inspect(module)}.#{function}/#{arity} took #{difference}ms to analyze!\n"
+            ])
           end
 
           {findex + 1, now}
@@ -93,33 +94,38 @@ defmodule Mix.Tasks.Tria.Warmup do
   end
 
   defp parse_args(args, opts \\ %{from: :loaded, set: nil})
+
   defp parse_args(["--loaded" | tail], opts) do
     parse_args(tail, %{opts | from: :loaded})
   end
+
   defp parse_args(["--available" | tail], opts) do
     parse_args(tail, %{opts | from: :available})
   end
+
   defp parse_args(["--set", "true" | tail], opts) do
     parse_args(tail, %{opts | set: true})
   end
+
   defp parse_args(["--set", "false" | tail], opts) do
     parse_args(tail, %{opts | set: false})
   end
+
   defp parse_args(["--only", mfarity | tail], opts) do
     {:/, _, [{:., _, [aliased, function]}, arity]} = Code.string_to_quoted!(mfarity)
     parse_args(tail, %{opts | from: {unalias(aliased), function, arity}})
   end
+
   defp parse_args([], opts), do: opts
 
   defp status(all_modules, current_module, module, all_functions, current_function) do
-    IO.write [
+    IO.write([
       IO.ANSI.clear_line(),
-      "\r#{current_module}/#{all_modules} #{inspect module} #{current_function}/#{all_functions}"
-    ]
+      "\r#{current_module}/#{all_modules} #{inspect(module)} #{current_function}/#{all_functions}"
+    ])
   end
 
   defp now do
     :erlang.monotonic_time(:millisecond)
   end
-
 end
